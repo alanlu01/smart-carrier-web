@@ -2,6 +2,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Outlet, Link, createRootRouteWithContext, useRouter } from "@tanstack/react-router";
 import { useEffect } from "react";
 import { reportLovableError } from "../lib/lovable-error-reporting";
+import { LanguageProvider, useLanguage } from "../lib/i18n";
 
 function NotFoundComponent() {
   return (
@@ -71,6 +72,16 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
 
 function RootComponent() {
   const { queryClient } = Route.useRouteContext();
+
+  return (
+    <LanguageProvider>
+      <TranslatedApp queryClient={queryClient} />
+    </LanguageProvider>
+  );
+}
+
+function TranslatedApp({ queryClient }: { queryClient: QueryClient }) {
+  useLanguage();
 
   return (
     <QueryClientProvider client={queryClient}>

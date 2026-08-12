@@ -2,6 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { z } from "zod";
 import { supabase } from "@/integrations/supabase/client";
+import { LanguageToggle, tr, useLanguage } from "@/lib/i18n";
 import {
   advanceDemoTask,
   cancelDemoTask,
@@ -31,7 +32,6 @@ import {
   ShoppingCart,
   BatteryCharging,
   PackageOpen,
-  Globe,
   ChevronRight,
   Zap,
   PhoneCall,
@@ -253,6 +253,7 @@ const STAGES: { key: SimStage; label: string; hint: string }[] = [
 ];
 
 function CallPage() {
+  useLanguage();
   const { location: locCode, demo: demoSearch } = Route.useSearch();
   const [loc, setLoc] = useState<Location | null>(null);
   const [locError, setLocError] = useState<string | null>(null);
@@ -262,13 +263,12 @@ function CallPage() {
   const [cart, setCart] = useState<Record<string, number>>({});
   const [allLocations, setAllLocations] = useState<Location[]>([]);
   const [aiOpen, setAiOpen] = useState(false);
-  const [lang, setLang] = useState<"zh" | "en">("zh");
   const [demoMode, setDemoMode] = useState(Boolean(demoSearch));
   const [demoState, setDemoState] = useState<DemoState | null>(null);
 
   useEffect(() => {
     if (!locCode) {
-      setLocError("網址缺少 location 參數，請重新掃描 QR Code。");
+      setLocError(tr("網址缺少 location 參數，請重新掃描 QR Code。"));
       return;
     }
     let active = true;
@@ -280,7 +280,7 @@ function CallPage() {
         setLoc(local);
         setLocError(null);
       } else {
-        setLocError(`找不到地點代碼「${locCode}」`);
+        setLocError(tr(`找不到地點代碼「${locCode}」`));
       }
     };
     if (demoSearch) {
@@ -377,7 +377,7 @@ function CallPage() {
       .single();
     setBusy(false);
     if (error || !data) {
-      alert("呼叫失敗，請再試一次");
+      alert(tr("呼叫失敗，請再試一次"));
       return;
     }
     setRich({
@@ -440,7 +440,7 @@ function CallPage() {
             </div>
             <div className="leading-tight">
               <div className="text-[10px] uppercase tracking-[0.2em] opacity-80">FlowCharge</div>
-              <div className="text-sm font-bold">智慧商場服務</div>
+              <div className="text-sm font-bold">{tr("智慧商場服務")}</div>
             </div>
           </div>
           <div className="flex items-center gap-2">
@@ -449,13 +449,7 @@ function CallPage() {
                 DEMO
               </span>
             )}
-            <button
-              onClick={() => setLang(lang === "zh" ? "en" : "zh")}
-              className="flex items-center gap-1 rounded-full bg-white/15 px-3 py-1.5 text-xs font-medium backdrop-blur hover:bg-white/25"
-            >
-              <Globe className="h-3.5 w-3.5" />
-              {lang === "zh" ? "中" : "EN"}
-            </button>
+            <LanguageToggle light />
           </div>
         </div>
 
@@ -465,24 +459,24 @@ function CallPage() {
             <div className="text-sm">{locError}</div>
           ) : !loc ? (
             <div className="flex items-center gap-2 text-sm opacity-90">
-              <Loader2 className="h-4 w-4 animate-spin" /> 定位中...
+              <Loader2 className="h-4 w-4 animate-spin" /> {tr("定位中...")}
             </div>
           ) : (
             <div className="flex items-center justify-between">
               <div className="min-w-0">
                 <div className="flex items-center gap-1 text-[11px] opacity-80">
-                  <MapPin className="h-3 w-3" /> 您目前位置
+                  <MapPin className="h-3 w-3" /> {tr("您目前位置")}
                 </div>
-                <div className="truncate text-base font-bold">{loc.name}</div>
+                <div className="truncate text-base font-bold">{tr(loc.name)}</div>
                 <div className="font-mono text-[10px] uppercase opacity-70">{loc.code}</div>
               </div>
               <div className="shrink-0 text-right">
                 <div className="inline-flex items-center gap-1 rounded-full bg-emerald-400/25 px-2 py-0.5 text-[10px] font-semibold">
                   <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-emerald-300" />{" "}
-                  {demoMode ? robot.lastEvent : "機器人待命中"}
+                  {tr(demoMode ? robot.lastEvent : "機器人待命中")}
                 </div>
                 <div className="mt-1 text-[10px] opacity-80">
-                  FlowBot #01 · 電量 {demoMode ? robot.battery : 92}%
+                  FlowBot #01 · {tr("電量")} {demoMode ? robot.battery : 92}%
                 </div>
               </div>
             </div>
@@ -493,17 +487,17 @@ function CallPage() {
           <div className="mt-3 grid grid-cols-3 gap-2 text-center text-[10px]">
             <div className="rounded-xl bg-white/80 px-2 py-2 shadow-sm">
               <div className="font-bold text-primary">{availableBanks.length}</div>
-              <div className="text-muted-foreground">可租借</div>
+              <div className="text-muted-foreground">{tr("可租借")}</div>
             </div>
             <div className="rounded-xl bg-white/80 px-2 py-2 shadow-sm">
               <div className="font-bold text-amber-600">{emptySlots}</div>
-              <div className="text-muted-foreground">可歸還槽</div>
+              <div className="text-muted-foreground">{tr("可歸還槽")}</div>
             </div>
             <div className="rounded-xl bg-white/80 px-2 py-2 shadow-sm">
               <div className="font-bold text-emerald-600">
                 {demoMode ? `${robot.battery}%` : "92%"}
               </div>
-              <div className="text-muted-foreground">車載電量</div>
+              <div className="text-muted-foreground">{tr("車載電量")}</div>
             </div>
           </div>
         )}
@@ -536,7 +530,7 @@ function CallPage() {
                 onClick={() => setView("home")}
                 className="mb-3 inline-flex items-center gap-1 text-xs font-medium text-muted-foreground hover:text-foreground"
               >
-                <ArrowLeft className="h-3.5 w-3.5" /> 返回首頁
+                <ArrowLeft className="h-3.5 w-3.5" /> {tr("返回首頁")}
               </button>
               {view === "powerbank" && loc && (
                 <PowerBankFlow
@@ -586,7 +580,7 @@ function CallPage() {
                     onClick={() => setAiOpen(true)}
                     className="rounded-xl bg-[hsl(275_85%_60%)] px-5 py-2.5 text-sm font-semibold text-white shadow-lg shadow-purple-500/30"
                   >
-                    開啟 AI 客服對話
+                    {tr("開啟 AI 客服對話")}
                   </button>
                 </div>
               )}
@@ -638,9 +632,11 @@ function HomeCards({
 }) {
   return (
     <div>
-      <h1 className="text-2xl font-black leading-tight tracking-tight">您好，需要什麼服務？</h1>
+      <h1 className="text-2xl font-black leading-tight tracking-tight">
+        {tr("您好，需要什麼服務？")}
+      </h1>
       <p className="mt-1.5 text-xs leading-relaxed text-muted-foreground">
-        FlowCharge 可以協助您租借行動電源、購買飲料與零食、查詢商場路線，以及回答各種問題。
+        {tr("FlowCharge 可以協助您租借行動電源、購買飲料與零食、查詢商場路線，以及回答各種問題。")}
       </p>
 
       <button
@@ -655,15 +651,15 @@ function HomeCards({
         </div>
         <div className="min-w-0 flex-1">
           <div className="text-[10px] font-semibold uppercase tracking-wider opacity-80">
-            最推薦
+            {tr("最推薦")}
           </div>
-          <div className="text-lg font-black">租借行動電源</div>
-          <div className="text-xs opacity-90">手機快沒電了？立即租借。</div>
+          <div className="text-lg font-black">{tr("租借行動電源")}</div>
+          <div className="text-xs opacity-90">{tr("手機快沒電了？立即租借。")}</div>
           <div className="mt-1.5 flex items-center gap-3 text-[11px]">
             <span className="rounded-full bg-white/20 px-2 py-0.5 font-semibold">
-              剩 {availableCount} 顆
+              {tr("剩 {{count}} 顆", { count: availableCount })}
             </span>
-            <span className="opacity-90">NT$ 20 起 / 小時</span>
+            <span className="opacity-90">{tr("NT$ 20 起 / 小時")}</span>
           </div>
         </div>
         <ChevronRight className="h-5 w-5 shrink-0 opacity-80 transition group-hover:translate-x-1" />
@@ -708,8 +704,8 @@ function HomeCards({
           <PhoneCall className="h-6 w-6" />
         </div>
         <div className="min-w-0 flex-1">
-          <div className="text-sm font-bold">呼叫 FlowCharge</div>
-          <div className="text-[11px] text-muted-foreground">讓機器人前往您的位置</div>
+          <div className="text-sm font-bold">{tr("呼叫 FlowCharge")}</div>
+          <div className="text-[11px] text-muted-foreground">{tr("讓機器人前往您的位置")}</div>
         </div>
         <ChevronRight className="h-4 w-4 text-muted-foreground transition group-hover:translate-x-1" />
       </button>
@@ -745,7 +741,7 @@ function FeatureCard({
     >
       {badge && (
         <span className="absolute right-2 top-2 rounded-full bg-muted px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider text-muted-foreground">
-          {badge}
+          {tr(badge)}
         </span>
       )}
       <div
@@ -754,8 +750,8 @@ function FeatureCard({
       >
         <Icon className="h-5 w-5" />
       </div>
-      <div className="text-sm font-bold">{title}</div>
-      <div className="-mt-1 text-[11px] text-muted-foreground">{desc}</div>
+      <div className="text-sm font-bold">{tr(title)}</div>
+      <div className="-mt-1 text-[11px] text-muted-foreground">{tr(desc)}</div>
     </button>
   );
 }
@@ -783,8 +779,10 @@ function PowerBankFlow({
             <BatteryCharging className="h-5 w-5" />
           </div>
           <div>
-            <h2 className="text-lg font-bold">租借行動電源</h2>
-            <p className="text-[11px] text-muted-foreground">目前 {banks.length} 顆可租借</p>
+            <h2 className="text-lg font-bold">{tr("租借行動電源")}</h2>
+            <p className="text-[11px] text-muted-foreground">
+              {tr("目前 {{count}} 顆可租借", { count: banks.length })}
+            </p>
           </div>
         </div>
         <dl className="mt-4 grid grid-cols-2 gap-2 text-xs">
@@ -793,16 +791,16 @@ function PowerBankFlow({
           <SpecCell k="接頭" v="USB-C · Lightning · Micro USB" />
           <SpecCell k="租借費用" v="NT$ 20 / 小時起" />
           <SpecCell k="當日上限" v="NT$ 100 / 日" />
-          <SpecCell k="押金" v={`NT$ ${DEPOSIT}（歸還退還）`} />
+          <SpecCell k="押金" v={tr("NT$ {{amount}}（歸還退還）", { amount: DEPOSIT })} />
         </dl>
         <div className="mt-3 rounded-xl bg-[hsl(238_82%_60%)]/6 p-3 text-[11px] leading-relaxed text-muted-foreground">
-          逾期未還將依租借規則計算；歸還時按下「歸還行動電源」，機器人會前往收取。
+          {tr("逾期未還將依租借規則計算；歸還時按下「歸還行動電源」，機器人會前往收取。")}
         </div>
         <button
           onClick={() => setStep("plan")}
           className="mt-4 flex w-full items-center justify-center gap-2 rounded-xl bg-[hsl(238_82%_60%)] py-3.5 text-sm font-bold text-white shadow-lg shadow-indigo-500/30"
         >
-          選擇租借方案 <ArrowRight className="h-4 w-4" />
+          {tr("選擇租借方案")} <ArrowRight className="h-4 w-4" />
         </button>
       </div>
     );
@@ -825,14 +823,14 @@ function PowerBankFlow({
               <Clock className="h-8 w-8 text-[hsl(238_82%_60%)]" />
               <div className="flex-1">
                 <div className="flex items-center gap-2">
-                  <div className="text-sm font-bold">{p.label}</div>
+                  <div className="text-sm font-bold">{tr(p.label)}</div>
                   {p.tag && (
                     <span className="rounded-full bg-[hsl(30_95%_55%)] px-2 py-0.5 text-[10px] font-bold text-white">
-                      {p.tag}
+                      {tr(p.tag)}
                     </span>
                   )}
                 </div>
-                <div className="text-[11px] text-muted-foreground">{p.hint}</div>
+                <div className="text-[11px] text-muted-foreground">{tr(p.hint)}</div>
               </div>
               <div className="text-right">
                 <div className="text-lg font-black text-[hsl(238_82%_60%)]">NT$ {p.price}</div>
@@ -847,11 +845,14 @@ function PowerBankFlow({
   if (step === "pick") {
     return (
       <div>
-        <StepHead title="選擇行動電源" sub={`方案：${plan?.label} · NT$ ${plan?.price}`} />
+        <StepHead
+          title="選擇行動電源"
+          sub={`${tr("租借方案")}：${tr(plan?.label ?? "")} · NT$ ${plan?.price}`}
+        />
         <div className="mt-3 space-y-2">
           {banks.length === 0 ? (
             <div className="rounded-xl bg-amber-50 p-4 text-center text-xs text-amber-800">
-              目前沒有可租借的行動電源，請稍後再試。
+              {tr("目前沒有可租借的行動電源，請稍後再試。")}
             </div>
           ) : (
             banks.map((b) => (
@@ -866,7 +867,9 @@ function PowerBankFlow({
                 <BatteryIcon pct={b.battery} />
                 <div className="flex-1">
                   <div className="text-sm font-semibold">{b.id}</div>
-                  <div className="text-xs text-muted-foreground">電量 {b.battery}%</div>
+                  <div className="text-xs text-muted-foreground">
+                    {tr("電量 {{battery}}%", { battery: b.battery })}
+                  </div>
                 </div>
                 <ChevronRight className="h-4 w-4 text-muted-foreground" />
               </button>
@@ -881,13 +884,13 @@ function PowerBankFlow({
   return (
     <PaymentSheet
       summary={[
-        { k: "租借方案", v: plan!.label },
+        { k: "租借方案", v: tr(plan!.label) },
         { k: "行動電源", v: `${pb!.id}（${pb!.battery}%）` },
         { k: "租借費用", v: `NT$ ${plan!.price}` },
         { k: "押金（歸還退還）", v: `NT$ ${DEPOSIT}` },
       ]}
       total={plan!.price + DEPOSIT}
-      cta="確認付款並租借"
+      cta={tr("確認付款並租借")}
       busy={busy}
       onPay={() => onRent(pb!, plan!)}
     />
@@ -897,16 +900,16 @@ function PowerBankFlow({
 function SpecCell({ k, v }: { k: string; v: string }) {
   return (
     <div className="rounded-lg border border-border p-2.5">
-      <dt className="text-[10px] text-muted-foreground">{k}</dt>
-      <dd className="mt-0.5 text-xs font-semibold">{v}</dd>
+      <dt className="text-[10px] text-muted-foreground">{tr(k)}</dt>
+      <dd className="mt-0.5 text-xs font-semibold">{tr(v)}</dd>
     </div>
   );
 }
 function StepHead({ title, sub }: { title: string; sub?: string }) {
   return (
     <div>
-      <h2 className="text-lg font-bold">{title}</h2>
-      {sub && <p className="text-[11px] text-muted-foreground">{sub}</p>}
+      <h2 className="text-lg font-bold">{tr(title)}</h2>
+      {sub && <p className="text-[11px] text-muted-foreground">{tr(sub)}</p>}
     </div>
   );
 }
@@ -945,17 +948,17 @@ function PaymentSheet({
       <div className="mt-3 space-y-1.5 rounded-xl bg-secondary p-3 text-sm">
         {summary.map((r) => (
           <div key={r.k} className="flex justify-between">
-            <span className="text-muted-foreground">{r.k}</span>
-            <span className="font-medium">{r.v}</span>
+            <span className="text-muted-foreground">{tr(r.k)}</span>
+            <span className="font-medium">{tr(r.v)}</span>
           </div>
         ))}
         <div className="my-1 border-t border-border" />
         <div className="flex justify-between text-base font-bold">
-          <span>總金額</span>
+          <span>{tr("總金額")}</span>
           <span>NT$ {total}</span>
         </div>
       </div>
-      <div className="mt-4 text-xs font-semibold text-muted-foreground">付款方式</div>
+      <div className="mt-4 text-xs font-semibold text-muted-foreground">{tr("付款方式")}</div>
       <div className="mt-2 grid grid-cols-3 gap-2">
         {PAYMENTS.map((p) => {
           const I = p.icon;
@@ -969,7 +972,7 @@ function PaymentSheet({
               }`}
             >
               <I className="h-5 w-5" style={{ color: p.color }} />
-              {p.label}
+              {tr(p.label)}
             </button>
           );
         })}
@@ -981,13 +984,15 @@ function PaymentSheet({
       >
         {processing ? (
           <>
-            <Loader2 className="h-4 w-4 animate-spin" /> 付款處理中...
+            <Loader2 className="h-4 w-4 animate-spin" /> {tr("付款處理中...")}
           </>
         ) : (
           cta
         )}
       </button>
-      <p className="mt-2 text-center text-[10px] text-muted-foreground">此為示範環境，未實際扣款</p>
+      <p className="mt-2 text-center text-[10px] text-muted-foreground">
+        {tr("此為示範環境，未實際扣款")}
+      </p>
     </div>
   );
 }
@@ -1007,19 +1012,21 @@ function ReturnPanel({
       <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-[hsl(238_82%_60%)]/10 text-[hsl(238_82%_60%)]">
         <PackageOpen className="h-8 w-8" />
       </div>
-      <h2 className="mt-3 text-xl font-bold">歸還行動電源</h2>
+      <h2 className="mt-3 text-xl font-bold">{tr("歸還行動電源")}</h2>
       <p className="mt-1 text-xs text-muted-foreground">
-        將行動電源上的 QR Code 對準掃描區，或呼叫機器人前來收取。
+        {tr("將行動電源上的 QR Code 對準掃描區，或呼叫機器人前來收取。")}
       </p>
       <div
         className={`mt-3 rounded-xl px-3 py-2 text-xs ${emptySlots > 0 ? "bg-emerald-50 text-emerald-700" : "bg-amber-50 text-amber-700"}`}
       >
-        {emptySlots > 0 ? `目前有 ${emptySlots} 個空槽可歸還` : "目前沒有空槽，暫停歸還"}
+        {emptySlots > 0
+          ? tr("目前有 {{count}} 個空槽可歸還", { count: emptySlots })
+          : tr("目前沒有空槽，暫停歸還")}
       </div>
       <div className="mt-5 flex h-40 items-center justify-center rounded-xl border-2 border-dashed border-border bg-muted/30 text-xs text-muted-foreground">
         <div className="text-center">
           <QrCode className="mx-auto h-10 w-10 opacity-50" />
-          <div className="mt-2">📷 相機掃描區（模擬）</div>
+          <div className="mt-2">{tr("📷 相機掃描區（模擬）")}</div>
         </div>
       </div>
       <button
@@ -1027,7 +1034,7 @@ function ReturnPanel({
         onClick={onReturn}
         className="mt-4 w-full rounded-xl bg-[hsl(238_82%_60%)] py-3 text-sm font-semibold text-white disabled:opacity-60"
       >
-        {busy ? "呼叫中..." : emptySlots === 0 ? "暫無可用空槽" : "呼叫機器人前來收回"}
+        {busy ? tr("呼叫中...") : emptySlots === 0 ? tr("暫無可用空槽") : tr("呼叫機器人前來收回")}
       </button>
     </div>
   );
@@ -1074,17 +1081,17 @@ function ShopPanel({
             >
               <button onClick={() => setDetail(it)} className="block w-full text-left">
                 <div className="text-3xl">{it.emoji}</div>
-                <div className="mt-1 text-sm font-semibold">{it.name}</div>
+                <div className="mt-1 text-sm font-semibold">{tr(it.name)}</div>
                 <div className="flex items-center gap-1 text-xs">
                   <span className="font-bold text-[hsl(30_95%_45%)]">NT$ {it.price}</span>
                   {it.temp === "cold" && (
                     <span className="rounded-full bg-blue-100 px-1.5 text-[9px] text-blue-700">
-                      冷
+                      {tr("冷")}
                     </span>
                   )}
                 </div>
                 <div className="text-[10px] text-muted-foreground">
-                  {out ? "已售完" : `庫存 ${it.stock}`}
+                  {out ? tr("已售完") : tr("庫存 {{count}}", { count: it.stock })}
                 </div>
               </button>
               {out ? (
@@ -1092,14 +1099,14 @@ function ShopPanel({
                   disabled
                   className="mt-2 w-full rounded-lg bg-muted py-1.5 text-xs font-semibold text-muted-foreground"
                 >
-                  已售完
+                  {tr("已售完")}
                 </button>
               ) : qty === 0 ? (
                 <button
                   onClick={() => change(it.id, 1)}
                   className="mt-2 w-full rounded-lg bg-[hsl(30_95%_55%)] py-1.5 text-xs font-semibold text-white"
                 >
-                  加入購物車
+                  {tr("加入購物車")}
                 </button>
               ) : (
                 <div className="mt-2 flex items-center justify-between rounded-lg bg-secondary p-1">
@@ -1148,7 +1155,7 @@ function TabBtn({
         active ? "bg-white text-foreground shadow" : "text-muted-foreground"
       }`}
     >
-      <Icon className="h-3.5 w-3.5" /> {label}
+      <Icon className="h-3.5 w-3.5" /> {tr(label)}
     </button>
   );
 }
@@ -1179,12 +1186,12 @@ function ProductDetailModal({
         </div>
         <div className="text-center">
           <div className="text-7xl">{item.emoji}</div>
-          <div className="mt-2 text-lg font-bold">{item.name}</div>
+          <div className="mt-2 text-lg font-bold">{tr(item.name)}</div>
           <div className="text-2xl font-black text-[hsl(30_95%_45%)]">NT$ {item.price}</div>
         </div>
         <dl className="mt-4 space-y-1.5 rounded-xl bg-secondary p-3 text-xs">
           <Row k="容量/重量" v={item.desc} />
-          <Row k="庫存" v={item.stock > 0 ? `${item.stock} 件` : "已售完"} />
+          <Row k="庫存" v={item.stock > 0 ? tr("{{count}} 件", { count: item.stock }) : "已售完"} />
           <Row k="保存方式" v={item.temp === "cold" ? "冷藏保存" : "常溫保存"} />
           <Row k="過敏原" v="請詳閱包裝標示" />
         </dl>
@@ -1194,7 +1201,7 @@ function ProductDetailModal({
               onClick={() => onChange(1)}
               className="mt-4 w-full rounded-xl bg-[hsl(30_95%_55%)] py-3 text-sm font-bold text-white"
             >
-              加入購物車
+              {tr("加入購物車")}
             </button>
           ) : (
             <div className="mt-4 flex items-center justify-between rounded-xl bg-secondary p-2">
@@ -1214,8 +1221,8 @@ function ProductDetailModal({
 function Row({ k, v }: { k: string; v: string }) {
   return (
     <div className="flex justify-between">
-      <span className="text-muted-foreground">{k}</span>
-      <span className="font-medium">{v}</span>
+      <span className="text-muted-foreground">{tr(k)}</span>
+      <span className="font-medium">{tr(v)}</span>
     </div>
   );
 }
@@ -1250,7 +1257,9 @@ function CartBar({
       <div className="fixed inset-x-0 bottom-0 z-20 border-t border-border bg-background/95 p-3 backdrop-blur">
         <div className="mx-auto flex max-w-md items-center gap-3">
           <button onClick={() => setOpen(true)} className="flex-1 text-left">
-            <div className="text-xs text-muted-foreground">{count} 件商品 · 點擊查看</div>
+            <div className="text-xs text-muted-foreground">
+              {tr("{{count}} 件商品 · 點擊查看", { count })}
+            </div>
             <div className="text-lg font-bold">NT$ {total}</div>
           </button>
           <button
@@ -1258,7 +1267,7 @@ function CartBar({
             onClick={() => setOpen(true)}
             className="flex items-center gap-2 rounded-xl bg-[hsl(30_95%_55%)] px-5 py-3 text-sm font-semibold text-white shadow-lg shadow-orange-500/30 disabled:opacity-60"
           >
-            <ShoppingCart className="h-4 w-4" /> 前往結帳
+            <ShoppingCart className="h-4 w-4" /> {tr("前往結帳")}
           </button>
         </div>
       </div>
@@ -1272,7 +1281,7 @@ function CartBar({
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-center justify-between">
-              <div className="text-lg font-bold">購物車</div>
+              <div className="text-lg font-bold">{tr("購物車")}</div>
               <button
                 onClick={() => setOpen(false)}
                 className="rounded-full p-1 hover:bg-secondary"
@@ -1288,7 +1297,7 @@ function CartBar({
                 >
                   <div className="text-2xl">{item.emoji}</div>
                   <div className="flex-1">
-                    <div className="text-sm font-semibold">{item.name}</div>
+                    <div className="text-sm font-semibold">{tr(item.name)}</div>
                     <div className="text-xs text-muted-foreground">
                       NT$ {item.price} × {qty}
                     </div>
@@ -1320,11 +1329,11 @@ function CartBar({
             <div className="mt-4">
               <PaymentSheet
                 summary={items.map(({ item, qty }) => ({
-                  k: `${item.name} × ${qty}`,
+                  k: `${tr(item.name)} × ${qty}`,
                   v: `NT$ ${item.price * qty}`,
                 }))}
                 total={total}
-                cta="確認付款並下單"
+                cta={tr("確認付款並下單")}
                 busy={busy}
                 onPay={() => {
                   setOpen(false);
@@ -1354,7 +1363,12 @@ function NavPanel({
   const [q, setQ] = useState("");
   const dests = locations.filter((l) => l.code !== currentCode);
   const filtered = q
-    ? dests.filter((l) => l.name.includes(q) || l.code.toLowerCase().includes(q.toLowerCase()))
+    ? dests.filter(
+        (l) =>
+          l.name.toLowerCase().includes(q.toLowerCase()) ||
+          tr(l.name).toLowerCase().includes(q.toLowerCase()) ||
+          l.code.toLowerCase().includes(q.toLowerCase()),
+      )
     : dests;
   return (
     <div>
@@ -1363,7 +1377,7 @@ function NavPanel({
         <input
           value={q}
           onChange={(e) => setQ(e.target.value)}
-          placeholder="搜尋店家、餐廳、洗手間或設施"
+          placeholder={tr("搜尋店家、餐廳、洗手間或設施")}
           className="flex-1 bg-transparent text-sm outline-none"
         />
       </div>
@@ -1371,17 +1385,17 @@ function NavPanel({
         {NAV_TAGS.map((t) => (
           <button
             key={t}
-            onClick={() => setQ(t)}
+            onClick={() => setQ(tr(t))}
             className="rounded-full border border-border bg-white px-3 py-1 text-[11px] hover:border-[hsl(150_70%_42%)] hover:text-[hsl(150_70%_35%)]"
           >
-            {t}
+            {tr(t)}
           </button>
         ))}
       </div>
       <div className="mt-3 space-y-2">
         {filtered.length === 0 && (
           <div className="rounded-xl border border-dashed border-border p-4 text-center text-sm text-muted-foreground">
-            找不到符合結果
+            {tr("找不到符合結果")}
           </div>
         )}
         {filtered.map((l) => (
@@ -1393,10 +1407,10 @@ function NavPanel({
               <MapPin className="h-5 w-5" />
             </div>
             <div className="min-w-0 flex-1">
-              <div className="truncate text-sm font-semibold">{l.name}</div>
+              <div className="truncate text-sm font-semibold">{tr(l.name)}</div>
               <div className="flex items-center gap-2 text-[11px] text-muted-foreground">
                 <span className="font-mono uppercase">{l.code}</span>
-                <span>· 營業中</span>
+                <span>{tr("· 營業中")}</span>
               </div>
             </div>
             <button
@@ -1404,7 +1418,7 @@ function NavPanel({
               onClick={() => onGo(l)}
               className="flex items-center gap-1 rounded-lg bg-[hsl(150_70%_42%)] px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-60"
             >
-              <Navigation className="h-3 w-3" /> 帶路
+              <Navigation className="h-3 w-3" /> {tr("帶路")}
             </button>
           </div>
         ))}
@@ -1432,11 +1446,11 @@ function CallBotPanel({
           <PhoneCall className="h-5 w-5" />
         </div>
         <div>
-          <h2 className="text-lg font-bold">呼叫 FlowCharge</h2>
-          <p className="text-[11px] text-muted-foreground">預估到達時間 1~3 分鐘</p>
+          <h2 className="text-lg font-bold">{tr("呼叫 FlowCharge")}</h2>
+          <p className="text-[11px] text-muted-foreground">{tr("預估到達時間 1~3 分鐘")}</p>
         </div>
       </div>
-      <div className="mt-4 text-xs font-semibold text-muted-foreground">呼叫用途</div>
+      <div className="mt-4 text-xs font-semibold text-muted-foreground">{tr("呼叫用途")}</div>
       <div className="mt-2 grid grid-cols-2 gap-2">
         {purposes.map((p) => (
           <button
@@ -1448,16 +1462,16 @@ function CallBotPanel({
                 : "border-border"
             }`}
           >
-            {p}
+            {tr(p)}
           </button>
         ))}
       </div>
-      <div className="mt-4 text-xs font-semibold text-muted-foreground">備註（選填）</div>
+      <div className="mt-4 text-xs font-semibold text-muted-foreground">{tr("備註（選填）")}</div>
       <textarea
         value={note}
         onChange={(e) => setNote(e.target.value)}
         rows={2}
-        placeholder="例如：我在服務台旁的座位"
+        placeholder={tr("例如：我在服務台旁的座位")}
         className="mt-1.5 w-full rounded-xl border border-input bg-background p-3 text-sm outline-none focus:border-ring"
       />
       <button
@@ -1465,7 +1479,7 @@ function CallBotPanel({
         onClick={() => setConfirm(true)}
         className="mt-4 flex w-full items-center justify-center gap-2 rounded-xl bg-[hsl(190_85%_45%)] py-3.5 text-sm font-bold text-white shadow-lg shadow-cyan-500/30 disabled:opacity-60"
       >
-        <Bot className="h-4 w-4" /> 呼叫 FlowCharge
+        <Bot className="h-4 w-4" /> {tr("呼叫 FlowCharge")}
       </button>
       {confirm && (
         <div
@@ -1476,7 +1490,7 @@ function CallBotPanel({
             className="w-full max-w-sm rounded-2xl bg-card p-5"
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="text-base font-bold">確認呼叫？</div>
+            <div className="text-base font-bold">{tr("確認呼叫？")}</div>
             <div className="mt-2 rounded-xl bg-secondary p-3 text-sm">
               <Row k="用途" v={purpose} />
               {note && <Row k="備註" v={note} />}
@@ -1486,7 +1500,7 @@ function CallBotPanel({
                 onClick={() => setConfirm(false)}
                 className="flex-1 rounded-xl border border-border py-2.5 text-sm font-medium"
               >
-                取消
+                {tr("取消")}
               </button>
               <button
                 onClick={() => {
@@ -1495,7 +1509,7 @@ function CallBotPanel({
                 }}
                 className="flex-1 rounded-xl bg-[hsl(190_85%_45%)] py-2.5 text-sm font-bold text-white"
               >
-                確認呼叫
+                {tr("確認呼叫")}
               </button>
             </div>
           </div>
@@ -1543,8 +1557,8 @@ function AIChatModal({
               <Bot className="h-5 w-5" />
             </div>
             <div>
-              <div className="text-sm font-semibold">FlowCharge AI 客服</div>
-              <div className="text-[11px] text-success">● 線上</div>
+              <div className="text-sm font-semibold">{tr("FlowCharge AI 客服")}</div>
+              <div className="text-[11px] text-success">{tr("● 線上")}</div>
             </div>
           </div>
           <button onClick={onClose} className="rounded-full p-1.5 hover:bg-secondary">
@@ -1561,19 +1575,19 @@ function AIChatModal({
                     m.role === "user" ? "bg-[hsl(275_85%_60%)] text-white" : "bg-secondary"
                   }`}
                 >
-                  {m.text}
+                  {m.role === "bot" ? tr(m.text) : m.text}
                 </div>
               </div>
               {m.suggestStaff && (
                 <div className="mt-2 flex flex-col gap-2">
                   <button className="rounded-xl border border-border bg-white py-2 text-xs font-medium">
-                    聯絡真人客服
+                    {tr("聯絡真人客服")}
                   </button>
                   <button
                     onClick={onCallService}
                     className="rounded-xl bg-[hsl(190_85%_45%)] py-2 text-xs font-bold text-white"
                   >
-                    呼叫服務機器人
+                    {tr("呼叫服務機器人")}
                   </button>
                 </div>
               )}
@@ -1586,10 +1600,10 @@ function AIChatModal({
             {QUICK_Q.map((q) => (
               <button
                 key={q}
-                onClick={() => ask(q)}
+                onClick={() => ask(tr(q))}
                 className="shrink-0 rounded-full bg-secondary px-3 py-1 text-[11px] hover:bg-secondary/70"
               >
-                {q}
+                {tr(q)}
               </button>
             ))}
           </div>
@@ -1598,7 +1612,7 @@ function AIChatModal({
               value={input}
               onChange={(e) => setInput(e.target.value)}
               onKeyDown={(e) => e.key === "Enter" && ask(input)}
-              placeholder="輸入問題..."
+              placeholder={tr("輸入問題...")}
               className="flex-1 rounded-xl border border-input bg-background px-3 py-2 text-sm outline-none focus:border-ring"
             />
             <button
@@ -1616,27 +1630,33 @@ function AIChatModal({
 function fakeReply(q: string): { text: string; suggestStaff?: boolean } {
   if (/(電源|充電|power|電池)/i.test(q))
     return {
-      text: `目前有 ${POWER_BANKS.length} 顆行動電源可租借，方案從 NT$20/小時到 NT$100/日。請到「租借行動電源」選擇即可。`,
+      text: tr(
+        "目前有 {{count}} 顆行動電源可租借，方案從 NT$20/小時到 NT$100/日。請到「租借行動電源」選擇即可。",
+        { count: POWER_BANKS.length },
+      ),
     };
-  if (/(歸還|還)/.test(q))
-    return { text: "請進入「歸還行動電源」頁面，掃描電源上的 QR Code，或呼叫機器人前來收取。" };
-  if (/(飲料|水|咖啡)/.test(q))
-    return { text: "我們提供可樂、礦泉水、美式咖啡、檸檬紅茶，售價 NT$20~45。" };
-  if (/(零食|洋芋片|巧克力|餅乾)/.test(q))
-    return { text: "零食有洋芋片、巧克力、夾心餅乾、口香糖，NT$25~40。" };
-  if (/(關門|營業|幾點)/.test(q))
-    return { text: "商場營業時間為每日 11:00 – 22:00，週末延長至 22:30。" };
+  if (/(歸還|還|return)/i.test(q))
+    return { text: tr("請進入「歸還行動電源」頁面，掃描電源上的 QR Code，或呼叫機器人前來收取。") };
+  if (/(飲料|水|咖啡|drink|coffee|water)/i.test(q))
+    return { text: tr("我們提供可樂、礦泉水、美式咖啡、檸檬紅茶，售價 NT$20~45。") };
+  if (/(零食|洋芋片|巧克力|餅乾|snack|chips|chocolate)/i.test(q))
+    return { text: tr("零食有洋芋片、巧克力、夾心餅乾、口香糖，NT$25~40。") };
+  if (/(關門|營業|幾點|open|close|hours)/i.test(q))
+    return { text: tr("商場營業時間為每日 11:00 – 22:00，週末延長至 22:30。") };
   if (/(廁所|洗手間|toilet)/i.test(q))
-    return { text: "廁所位於各樓層電梯旁與服務台附近。使用「商場導航」我讓機器人帶您過去。" };
+    return { text: tr("廁所位於各樓層電梯旁與服務台附近。使用「商場導航」我讓機器人帶您過去。") };
   if (/(停車|parking)/i.test(q))
-    return { text: "地下 B1~B3 為停車場，前 30 分鐘免費，消費滿 NT$500 可折抵 1 小時。" };
-  if (/(活動|優惠|折扣)/.test(q))
-    return { text: "本週美食街 85 折、指定品牌買一送一，詳情請至服務台。" };
-  if (/(餐廳|吃|美食)/.test(q))
-    return { text: "3F 為美食街，1F 有咖啡與輕食，可用「商場導航」查詢。" };
+    return { text: tr("地下 B1~B3 為停車場，前 30 分鐘免費，消費滿 NT$500 可折抵 1 小時。") };
+  if (/(活動|優惠|折扣|event|sale|discount)/i.test(q))
+    return { text: tr("本週美食街 85 折、指定品牌買一送一，詳情請至服務台。") };
+  if (/(餐廳|吃|美食|restaurant|food)/i.test(q))
+    return { text: tr("3F 為美食街，1F 有咖啡與輕食，可用「商場導航」查詢。") };
   if (/(hi|hello|你好|哈囉)/i.test(q))
-    return { text: "您好！請問需要租借行動電源、購買商品，還是需要導航呢？" };
-  return { text: "這個問題需要真人服務人員協助，是否為您聯絡服務台？", suggestStaff: true };
+    return { text: tr("您好！請問需要租借行動電源、購買商品，還是需要導航呢？") };
+  return {
+    text: tr("這個問題需要真人服務人員協助，是否為您聯絡服務台？"),
+    suggestStaff: true,
+  };
 }
 
 /* ============= Task Tracker (local Demo state or live fallback) ============= */
@@ -1652,6 +1672,7 @@ function TaskTracker({
   onCancel: () => void;
   onDone: () => void;
 }) {
+  const { language } = useLanguage();
   const demo = rich.demo === true;
   const [stageIdx, setStageIdx] = useState(0);
   const [demoStage, setDemoStage] = useState<SimStage>("pending");
@@ -1687,9 +1708,15 @@ function TaskTracker({
   const current = demo
     ? (STAGES.find((stage) => stage.key === demoStage) ?? STAGES[0])
     : STAGES[stageIdx];
+  const currentStageIndex = demo
+    ? Math.max(
+        0,
+        STAGES.findIndex((stage) => stage.key === demoStage),
+      )
+    : stageIdx;
   const finished =
     current.key === "completed" || rich.db.status === "cancelled" || rich.db.status === "failed";
-  const arrived = demo ? ["arrived", "serving", "completed"].includes(demoStage) : stageIdx >= 3;
+  const arrived = currentStageIndex >= 3;
 
   const kindLabel = {
     powerbank: "行動電源租借",
@@ -1704,13 +1731,13 @@ function TaskTracker({
       {/* Header */}
       <div className="text-center">
         <div className="mx-auto inline-flex items-center gap-2 rounded-full bg-primary/10 px-3 py-1 text-[11px] font-semibold text-primary">
-          <Sparkles className="h-3 w-3" /> {kindLabel}
+          <Sparkles className="h-3 w-3" /> {tr(kindLabel)}
         </div>
         <div className="mt-2 font-mono text-[10px] uppercase tracking-widest text-muted-foreground">
-          訂單 #{rich.extras?.orderNo}
+          {tr("訂單 #{{number}}", { number: rich.extras?.orderNo ?? "—" })}
         </div>
-        <h2 className="mt-1 text-xl font-black">{current.label}</h2>
-        <p className="text-xs text-muted-foreground">{current.hint}</p>
+        <h2 className="mt-1 text-xl font-black">{tr(current.label)}</h2>
+        <p className="text-xs text-muted-foreground">{tr(current.hint)}</p>
       </div>
 
       {/* Robot animation */}
@@ -1736,8 +1763,8 @@ function TaskTracker({
       {/* Progress timeline */}
       <div className="mt-6 space-y-2">
         {STAGES.map((s, i) => {
-          const done = i < stageIdx;
-          const active = i === stageIdx;
+          const done = i < currentStageIndex;
+          const active = i === currentStageIndex;
           return (
             <div key={s.key} className="flex items-center gap-3">
               <div
@@ -1755,7 +1782,7 @@ function TaskTracker({
                 <div
                   className={`text-xs font-semibold ${active ? "text-primary" : done ? "text-foreground" : "text-muted-foreground"}`}
                 >
-                  {s.label}
+                  {tr(s.label)}
                 </div>
               </div>
               {active && !finished && <Loader2 className="h-3.5 w-3.5 animate-spin text-primary" />}
@@ -1767,17 +1794,17 @@ function TaskTracker({
       {/* Kind-specific info panel */}
       {arrived && !finished && (
         <div className="mt-5 rounded-2xl border-2 border-[hsl(30_95%_55%)]/40 bg-[hsl(30_95%_55%)]/8 p-4 text-center">
-          <div className="text-sm font-bold text-[hsl(30_95%_35%)]">FlowBot 已抵達</div>
+          <div className="text-sm font-bold text-[hsl(30_95%_35%)]">{tr("FlowBot 已抵達")}</div>
           <div className="mt-1 text-xs text-muted-foreground">
-            {rich.kind === "powerbank" && "請從機器人取出口拿取行動電源"}
-            {rich.kind === "shop" && "請從機器人商品出口拿取商品"}
-            {rich.kind === "return" && "請將行動電源放入機器人歸還口"}
-            {rich.kind === "nav" && "跟隨機器人前往目的地"}
-            {rich.kind === "callbot" && "機器人已到達您的位置"}
+            {rich.kind === "powerbank" && tr("請從機器人取出口拿取行動電源")}
+            {rich.kind === "shop" && tr("請從機器人商品出口拿取商品")}
+            {rich.kind === "return" && tr("請將行動電源放入機器人歸還口")}
+            {rich.kind === "nav" && tr("跟隨機器人前往目的地")}
+            {rich.kind === "callbot" && tr("機器人已到達您的位置")}
           </div>
           <div className="mt-3 flex items-center justify-center gap-2 text-[hsl(30_95%_45%)]">
             <ArrowRight className="h-5 w-5 animate-pulse" />
-            <span className="text-xs font-bold">請取出物品</span>
+            <span className="text-xs font-bold">{tr("請取出物品")}</span>
           </div>
         </div>
       )}
@@ -1788,14 +1815,15 @@ function TaskTracker({
           <div className="mx-auto flex h-24 w-24 items-center justify-center rounded-xl border-2 border-border bg-white">
             <QrCode className="h-16 w-16" />
           </div>
-          <div className="mt-2 text-[10px] text-muted-foreground">出示此 QR Code 歸還</div>
+          <div className="mt-2 text-[10px] text-muted-foreground">{tr("出示此 QR Code 歸還")}</div>
           {rich.extras?.plan && (
             <div className="mt-2 text-xs">
               <div>
-                {rich.extras.powerBankId} · {rich.extras.plan.label}
+                {rich.extras.powerBankId} · {tr(rich.extras.plan.label)}
               </div>
               <div className="text-muted-foreground">
-                於 {new Date().toLocaleTimeString("zh-TW")} 開始租借
+                {new Date().toLocaleTimeString(language === "en" ? "en-US" : "zh-TW")} ·{" "}
+                {tr("開始租借")}
               </div>
             </div>
           )}
@@ -1815,14 +1843,14 @@ function TaskTracker({
           onClick={onCancel}
           className="mt-4 w-full rounded-xl border border-border py-3 text-sm font-medium hover:bg-secondary"
         >
-          取消任務
+          {tr("取消任務")}
         </button>
       ) : (
         <button
           onClick={onDone}
           className="mt-4 w-full rounded-xl bg-primary py-3 text-sm font-semibold text-primary-foreground"
         >
-          我看到機器人了 · 完成
+          {tr("我看到機器人了 · 完成")}
         </button>
       )}
     </div>

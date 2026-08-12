@@ -3,6 +3,7 @@ import { useCallback, useEffect, useState } from "react";
 import { z } from "zod";
 import { QRCodeSVG } from "qrcode.react";
 import { supabase } from "@/integrations/supabase/client";
+import { LanguageToggle, tr, useLanguage } from "@/lib/i18n";
 import {
   advanceAllDemoTasks,
   getDemoState,
@@ -64,6 +65,7 @@ type Task = {
 type Location = { code: string; name: string; description: string | null };
 
 function AdminPage() {
+  useLanguage();
   const { demo: demoMode } = Route.useSearch();
   const [tab, setTab] = useState<"tasks" | "locations" | "qr">("tasks");
 
@@ -77,20 +79,21 @@ function AdminPage() {
             </div>
             <div>
               <div className="text-sm font-bold">RoboCall</div>
-              <div className="text-xs text-muted-foreground">管理後台</div>
+              <div className="text-xs text-muted-foreground">{tr("管理後台")}</div>
             </div>
           </Link>
           <div className="flex items-center gap-3">
             {demoMode && (
               <span className="rounded-full bg-amber-100 px-2.5 py-1 text-[10px] font-bold text-amber-800">
-                DEMO 模式
+                {tr("DEMO 模式")}
               </span>
             )}
+            <LanguageToggle />
             <Link
               to="/"
               className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
             >
-              <ArrowLeft className="h-4 w-4" /> 首頁
+              <ArrowLeft className="h-4 w-4" /> {tr("首頁")}
             </Link>
           </div>
         </div>
@@ -110,7 +113,7 @@ function AdminPage() {
               }`}
             >
               <t.icon className="h-4 w-4" />
-              {t.label}
+              {tr(t.label)}
             </button>
           ))}
         </div>
@@ -130,24 +133,25 @@ function DemoBanner() {
   return (
     <div className="mb-6 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-amber-900">
       <div>
-        <div className="text-sm font-bold">完整 Demo 控制台</div>
+        <div className="text-sm font-bold">{tr("完整 Demo 控制台")}</div>
         <div className="mt-0.5 text-xs">
-          顧客端與管理端共用本機 Demo 狀態；可開兩個分頁同步展示。
+          {tr("顧客端與管理端共用本機 Demo 狀態；可開兩個分頁同步展示。")}
         </div>
       </div>
       <button
         onClick={() => {
-          if (confirm("重設 Demo 任務、庫存與機器人狀態？")) resetDemoState();
+          if (confirm(tr("重設 Demo 任務、庫存與機器人狀態？"))) resetDemoState();
         }}
         className="inline-flex items-center gap-1.5 rounded-lg border border-amber-300 bg-white px-3 py-2 text-xs font-semibold hover:bg-amber-100"
       >
-        <RotateCcw className="h-3.5 w-3.5" /> 重設 Demo
+        <RotateCcw className="h-3.5 w-3.5" /> {tr("重設 Demo")}
       </button>
     </div>
   );
 }
 
 function TasksPanel({ demoMode }: { demoMode: boolean }) {
+  const { language } = useLanguage();
   const [tasks, setTasks] = useState<Task[] | null>(null);
   const [locs, setLocs] = useState<Record<string, Location>>({});
   const [demoState, setDemoState] = useState<DemoState | null>(null);
@@ -201,7 +205,7 @@ function TasksPanel({ demoMode }: { demoMode: boolean }) {
       .eq("id", id);
   }
   async function remove(id: string) {
-    if (!confirm("確定刪除此任務？")) return;
+    if (!confirm(tr("確定刪除此任務？"))) return;
     if (demoMode) {
       removeDemoTask(id);
       return;
@@ -221,9 +225,9 @@ function TasksPanel({ demoMode }: { demoMode: boolean }) {
     <div>
       {demoMode && demoState && <DemoRobotPanel state={demoState} />}
       <div className="grid gap-4 md:grid-cols-3">
-        <Stat label="等待中" value={pending} icon={Clock} tint="warning" />
-        <Stat label="執行中" value={inProgress} icon={Radio} tint="primary" />
-        <Stat label="今日完成" value={doneToday} icon={CheckCircle2} tint="success" />
+        <Stat label={tr("等待中")} value={pending} icon={Clock} tint="warning" />
+        <Stat label={tr("執行中")} value={inProgress} icon={Radio} tint="primary" />
+        <Stat label={tr("今日完成")} value={doneToday} icon={CheckCircle2} tint="success" />
       </div>
 
       <div
@@ -231,15 +235,17 @@ function TasksPanel({ demoMode }: { demoMode: boolean }) {
         style={{ boxShadow: "var(--shadow-card)" }}
       >
         <div className="flex items-center justify-between border-b border-border p-4">
-          <h2 className="font-semibold">最近任務</h2>
-          <span className="text-xs text-muted-foreground">即時更新中</span>
+          <h2 className="font-semibold">{tr("最近任務")}</h2>
+          <span className="text-xs text-muted-foreground">{tr("即時更新中")}</span>
         </div>
         {tasks === null ? (
           <div className="flex justify-center py-12 text-muted-foreground">
             <Loader2 className="h-5 w-5 animate-spin" />
           </div>
         ) : tasks.length === 0 ? (
-          <div className="py-16 text-center text-sm text-muted-foreground">目前沒有任務</div>
+          <div className="py-16 text-center text-sm text-muted-foreground">
+            {tr("目前沒有任務")}
+          </div>
         ) : (
           <div className="divide-y divide-border">
             {tasks.map((t) => (
@@ -248,16 +254,18 @@ function TasksPanel({ demoMode }: { demoMode: boolean }) {
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-2">
                     <span className="font-medium">
-                      {locs[t.location_code]?.name ?? t.location_code}
+                      {tr(locs[t.location_code]?.name ?? t.location_code)}
                     </span>
                     <span className="font-mono text-xs text-muted-foreground">
                       {t.location_code}
                     </span>
                   </div>
                   <div className="mt-0.5 text-xs text-muted-foreground">
-                    {new Date(t.created_at).toLocaleString("zh-TW", { hour12: false })}
+                    {new Date(t.created_at).toLocaleString(language === "en" ? "en-US" : "zh-TW", {
+                      hour12: false,
+                    })}
                     {t.robot_id && ` · 🤖 ${t.robot_id}`}
-                    {t.note && ` · ${t.note}`}
+                    {t.note && ` · ${tr(t.note)}`}
                   </div>
                 </div>
                 <div className="flex flex-wrap items-center gap-2">
@@ -266,7 +274,7 @@ function TasksPanel({ demoMode }: { demoMode: boolean }) {
                       onClick={() => update(t.id, "in_progress")}
                       className="rounded-lg bg-primary/10 px-3 py-1.5 text-xs font-medium text-primary hover:bg-primary/20"
                     >
-                      手動派發
+                      {tr("手動派發")}
                     </button>
                   )}
                   {t.status === "in_progress" && (
@@ -274,7 +282,7 @@ function TasksPanel({ demoMode }: { demoMode: boolean }) {
                       onClick={() => update(t.id, "done")}
                       className="rounded-lg bg-success/15 px-3 py-1.5 text-xs font-medium text-success-foreground hover:bg-success/25"
                     >
-                      標記完成
+                      {tr("標記完成")}
                     </button>
                   )}
                   <button
@@ -317,7 +325,7 @@ function DemoRobotPanel({ state }: { state: DemoState }) {
               <span className="h-2 w-2 rounded-full bg-emerald-500" />
             </div>
             <div className="text-xs text-muted-foreground">
-              {robotModeLabel(state.robot.mode)} · {state.robot.lastEvent}
+              {tr(robotModeLabel(state.robot.mode))} · {tr(state.robot.lastEvent)}
             </div>
           </div>
         </div>
@@ -327,7 +335,7 @@ function DemoRobotPanel({ state }: { state: DemoState }) {
             onClick={() => advanceAllDemoTasks()}
             className="inline-flex items-center gap-1.5 rounded-lg bg-primary px-3 py-2 text-xs font-semibold text-primary-foreground disabled:opacity-40"
           >
-            <Play className="h-3.5 w-3.5" /> 下一個模擬節點
+            <Play className="h-3.5 w-3.5" /> {tr("下一個模擬節點")}
           </button>
           {modeOptions.map((mode) => (
             <button
@@ -335,24 +343,29 @@ function DemoRobotPanel({ state }: { state: DemoState }) {
               onClick={() => setDemoRobotMode(mode)}
               className={`rounded-lg border px-2.5 py-2 text-[11px] font-medium ${state.robot.mode === mode ? "border-primary bg-primary/10 text-primary" : "border-border hover:bg-muted"}`}
             >
-              {robotModeLabel(mode)}
+              {tr(robotModeLabel(mode))}
             </button>
           ))}
         </div>
       </div>
       <div className="grid gap-3 p-4 sm:grid-cols-4">
         <MiniMetric
-          label="目前位置"
-          value={state.robot.locationCode === "BASE" ? "基地" : state.robot.locationCode}
+          label={tr("目前位置")}
+          value={state.robot.locationCode === "BASE" ? tr("基地") : state.robot.locationCode}
           icon={MapPin}
         />
-        <MiniMetric label="車載電量" value={`${state.robot.battery}%`} icon={BatteryCharging} />
-        <MiniMetric label="可租借" value={`${available} / 3`} icon={Bot} />
-        <MiniMetric label="可歸還槽" value={`${empty} / 3`} icon={PackageOpen} />
+        <MiniMetric
+          label={tr("車載電量")}
+          value={`${state.robot.battery}%`}
+          icon={BatteryCharging}
+        />
+        <MiniMetric label={tr("可租借")} value={`${available} / 3`} icon={Bot} />
+        <MiniMetric label={tr("可歸還槽")} value={`${empty} / 3`} icon={PackageOpen} />
       </div>
       {state.robot.mode === "emergency" && (
         <div className="mx-4 mb-4 flex items-center gap-2 rounded-xl bg-red-50 px-3 py-2 text-xs font-medium text-red-700">
-          <AlertTriangle className="h-4 w-4" /> 緊急停止：載具不可接收新任務，請確認環境後復原。
+          <AlertTriangle className="h-4 w-4" />{" "}
+          {tr("緊急停止：載具不可接收新任務，請確認環境後復原。")}
         </div>
       )}
     </div>
@@ -444,7 +457,7 @@ function StatusBadge({ status }: { status: Task["status"] }) {
       className={`inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-xs font-medium ${s.cls}`}
     >
       <s.Icon className="h-3 w-3" />
-      {s.label}
+      {tr(s.label)}
     </span>
   );
 }
@@ -504,7 +517,7 @@ function LocationsPanel({ demoMode }: { demoMode: boolean }) {
     reload();
   }
   async function remove(c: string) {
-    if (!confirm(`刪除地點 ${c}？`)) return;
+    if (!confirm(tr("刪除地點 {{code}}？", { code: c }))) return;
     if (demoMode) {
       updateDemoState((state) => {
         state.locations = state.locations.filter((location) => location.code !== c);
@@ -523,14 +536,16 @@ function LocationsPanel({ demoMode }: { demoMode: boolean }) {
         style={{ boxShadow: "var(--shadow-card)" }}
       >
         <div className="border-b border-border p-4">
-          <h2 className="font-semibold">已註冊地點</h2>
+          <h2 className="font-semibold">{tr("已註冊地點")}</h2>
         </div>
         {!locs ? (
           <div className="flex justify-center py-12 text-muted-foreground">
             <Loader2 className="h-5 w-5 animate-spin" />
           </div>
         ) : locs.length === 0 ? (
-          <div className="py-16 text-center text-sm text-muted-foreground">尚未新增地點</div>
+          <div className="py-16 text-center text-sm text-muted-foreground">
+            {tr("尚未新增地點")}
+          </div>
         ) : (
           <div className="divide-y divide-border">
             {locs.map((l) => (
@@ -539,9 +554,9 @@ function LocationsPanel({ demoMode }: { demoMode: boolean }) {
                   {l.code}
                 </div>
                 <div className="flex-1">
-                  <div className="font-medium">{l.name}</div>
+                  <div className="font-medium">{tr(l.name)}</div>
                   {l.description && (
-                    <div className="text-xs text-muted-foreground">{l.description}</div>
+                    <div className="text-xs text-muted-foreground">{tr(l.description)}</div>
                   )}
                 </div>
                 <button
@@ -561,11 +576,11 @@ function LocationsPanel({ demoMode }: { demoMode: boolean }) {
         className="h-fit rounded-2xl border border-border bg-card p-5"
         style={{ boxShadow: "var(--shadow-card)" }}
       >
-        <h2 className="font-semibold">新增地點</h2>
-        <p className="mt-1 text-xs text-muted-foreground">地點代碼會嵌入 QR Code。</p>
+        <h2 className="font-semibold">{tr("新增地點")}</h2>
+        <p className="mt-1 text-xs text-muted-foreground">{tr("地點代碼會嵌入 QR Code。")}</p>
         <div className="mt-4 space-y-3">
           <div>
-            <label className="text-xs font-medium">代碼（英數字）</label>
+            <label className="text-xs font-medium">{tr("代碼（英數字）")}</label>
             <input
               value={code}
               onChange={(e) => setCode(e.target.value)}
@@ -574,20 +589,20 @@ function LocationsPanel({ demoMode }: { demoMode: boolean }) {
             />
           </div>
           <div>
-            <label className="text-xs font-medium">名稱</label>
+            <label className="text-xs font-medium">{tr("名稱")}</label>
             <input
               value={name}
               onChange={(e) => setName(e.target.value)}
-              placeholder="A 區入口"
+              placeholder={tr("A 區入口")}
               className="mt-1 w-full rounded-lg border border-input bg-background px-3 py-2 text-sm outline-none focus:border-ring focus:ring-2 focus:ring-ring/20"
             />
           </div>
           <div>
-            <label className="text-xs font-medium">說明（可選）</label>
+            <label className="text-xs font-medium">{tr("說明（可選）")}</label>
             <input
               value={desc}
               onChange={(e) => setDesc(e.target.value)}
-              placeholder="主要入口大廳"
+              placeholder={tr("主要入口大廳")}
               className="mt-1 w-full rounded-lg border border-input bg-background px-3 py-2 text-sm outline-none focus:border-ring focus:ring-2 focus:ring-ring/20"
             />
           </div>
@@ -596,7 +611,7 @@ function LocationsPanel({ demoMode }: { demoMode: boolean }) {
           type="submit"
           className="mt-4 flex w-full items-center justify-center gap-1.5 rounded-lg bg-primary py-2.5 text-sm font-semibold text-primary-foreground"
         >
-          <Plus className="h-4 w-4" /> 新增
+          <Plus className="h-4 w-4" /> {tr("新增")}
         </button>
       </form>
     </div>
@@ -626,15 +641,15 @@ function QRPanel({ demoMode }: { demoMode: boolean }) {
         className="rounded-2xl border border-border bg-card p-5"
         style={{ boxShadow: "var(--shadow-card)" }}
       >
-        <h2 className="font-semibold">列印用 QR Code</h2>
+        <h2 className="font-semibold">{tr("列印用 QR Code")}</h2>
         <p className="mt-1 text-xs text-muted-foreground">
-          每個地點對應一組固定 QR Code。掃描後會開啟顧客呼叫頁。
+          {tr("每個地點對應一組固定 QR Code。掃描後會開啟顧客呼叫頁。")}
         </p>
       </div>
 
       <div className="mt-5 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
         {locs.map((l) => {
-          const url = `${origin}/call?location=${encodeURIComponent(l.code)}${demoMode ? "&demo=true" : ""}`;
+          const url = `${origin}${import.meta.env.BASE_URL}#/call?location=${encodeURIComponent(l.code)}${demoMode ? "&demo=true" : ""}`;
           return (
             <div
               key={l.code}
@@ -645,9 +660,9 @@ function QRPanel({ demoMode }: { demoMode: boolean }) {
                 <QRCodeSVG value={url} size={160} level="M" />
               </div>
               <div className="mt-4 font-mono text-xs text-muted-foreground">{l.code}</div>
-              <div className="text-lg font-semibold">{l.name}</div>
+              <div className="text-lg font-semibold">{tr(l.name)}</div>
               {l.description && (
-                <div className="text-xs text-muted-foreground">{l.description}</div>
+                <div className="text-xs text-muted-foreground">{tr(l.description)}</div>
               )}
               <a
                 href={url}
