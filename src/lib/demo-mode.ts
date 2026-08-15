@@ -2,7 +2,7 @@
  * Local demo state for the end-to-end competition walkthrough.
  *
  * The demo deliberately lives in localStorage so the customer page and the
- * operator page can be opened in two browser tabs without a Supabase project.
+ * operator page can be opened in two browser tabs without the cloud API.
  * The same shape can later be replaced by the ROS2/task-service adapter.
  */
 

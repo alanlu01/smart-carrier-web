@@ -2,7 +2,7 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { useCallback, useEffect, useState } from "react";
 import { z } from "zod";
 import { QRCodeSVG } from "qrcode.react";
-import { supabase } from "@/integrations/supabase/client";
+import { listLocations, listOrders, type ApiTask } from "@/lib/api";
 import { LanguageToggle, tr, useLanguage } from "@/lib/i18n";
 import {
   advanceAllDemoTasks,
@@ -53,15 +53,10 @@ export const Route = createFileRoute("/admin")({
   }),
 });
 
-type Task = {
-  id: string;
-  location_code: string;
-  status: "pending" | "in_progress" | "done" | "cancelled" | "failed";
-  note: string | null;
-  robot_id: string | null;
-  created_at: string;
-  updated_at: string;
-};
+type Task = Pick<
+  ApiTask,
+  "id" | "location_code" | "status" | "note" | "robot_id" | "created_at" | "updated_at"
+>;
 type Location = { code: string; name: string; description: string | null };
 
 function AdminPage() {
@@ -155,6 +150,7 @@ function TasksPanel({ demoMode }: { demoMode: boolean }) {
   const [tasks, setTasks] = useState<Task[] | null>(null);
   const [locs, setLocs] = useState<Record<string, Location>>({});
   const [demoState, setDemoState] = useState<DemoState | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
 
   const reload = useCallback(async () => {
     if (demoMode) {
@@ -172,26 +168,25 @@ function TasksPanel({ demoMode }: { demoMode: boolean }) {
         })),
       );
       setLocs(Object.fromEntries(state.locations.map((x) => [x.code, x as Location])));
+      setLoadError(null);
       return;
     }
-    const [{ data: t }, { data: l }] = await Promise.all([
-      supabase.from("tasks").select("*").order("created_at", { ascending: false }).limit(200),
-      supabase.from("locations").select("*"),
-    ]);
-    setTasks((t ?? []) as Task[]);
-    setLocs(Object.fromEntries((l ?? []).map((x) => [x.code, x as Location])));
+    try {
+      const [tasksData, locationsData] = await Promise.all([listOrders(200), listLocations()]);
+      setTasks(tasksData);
+      setLocs(Object.fromEntries(locationsData.map((x) => [x.code, x])));
+      setLoadError(null);
+    } catch {
+      setLoadError(tr("無法連線至後端服務，請稍後再試。"));
+      setTasks((current) => current ?? []);
+    }
   }, [demoMode]);
 
   useEffect(() => {
-    reload();
+    void reload();
     if (demoMode) return subscribeDemoState(reload);
-    const channel = supabase
-      .channel("admin-tasks")
-      .on("postgres_changes", { event: "*", schema: "public", table: "tasks" }, () => reload())
-      .subscribe();
-    return () => {
-      supabase.removeChannel(channel);
-    };
+    const timer = window.setInterval(reload, 5000);
+    return () => window.clearInterval(timer);
   }, [demoMode, reload]);
 
   async function update(id: string, status: Task["status"]) {
@@ -199,10 +194,7 @@ function TasksPanel({ demoMode }: { demoMode: boolean }) {
       setDemoTaskStatus(id, status);
       return;
     }
-    await supabase
-      .from("tasks")
-      .update({ status, completed_at: status === "done" ? new Date().toISOString() : null })
-      .eq("id", id);
+    // Live task state is owned by the authenticated robot API.
   }
   async function remove(id: string) {
     if (!confirm(tr("確定刪除此任務？"))) return;
@@ -210,7 +202,7 @@ function TasksPanel({ demoMode }: { demoMode: boolean }) {
       removeDemoTask(id);
       return;
     }
-    await supabase.from("tasks").delete().eq("id", id);
+    // Destructive live operations require an authenticated admin API.
   }
 
   const pending = tasks?.filter((t) => t.status === "pending").length ?? 0;
@@ -218,12 +210,18 @@ function TasksPanel({ demoMode }: { demoMode: boolean }) {
   const doneToday =
     tasks?.filter(
       (t) =>
-        t.status === "done" && new Date(t.updated_at).toDateString() === new Date().toDateString(),
+        t.status === "done" &&
+        new Date(t.updated_at ?? t.created_at).toDateString() === new Date().toDateString(),
     ).length ?? 0;
 
   return (
     <div>
       {demoMode && demoState && <DemoRobotPanel state={demoState} />}
+      {loadError && (
+        <div className="mb-4 rounded-xl border border-destructive/30 bg-destructive/5 px-4 py-3 text-sm text-destructive">
+          {loadError}
+        </div>
+      )}
       <div className="grid gap-4 md:grid-cols-3">
         <Stat label={tr("等待中")} value={pending} icon={Clock} tint="warning" />
         <Stat label={tr("執行中")} value={inProgress} icon={Radio} tint="primary" />
@@ -236,7 +234,9 @@ function TasksPanel({ demoMode }: { demoMode: boolean }) {
       >
         <div className="flex items-center justify-between border-b border-border p-4">
           <h2 className="font-semibold">{tr("最近任務")}</h2>
-          <span className="text-xs text-muted-foreground">{tr("即時更新中")}</span>
+          <span className="text-xs text-muted-foreground">
+            {tr(demoMode ? "即時更新中" : "每 5 秒同步後端")}
+          </span>
         </div>
         {tasks === null ? (
           <div className="flex justify-center py-12 text-muted-foreground">
@@ -268,31 +268,33 @@ function TasksPanel({ demoMode }: { demoMode: boolean }) {
                     {t.note && ` · ${tr(t.note)}`}
                   </div>
                 </div>
-                <div className="flex flex-wrap items-center gap-2">
-                  {t.status === "pending" && (
+                {demoMode && (
+                  <div className="flex flex-wrap items-center gap-2">
+                    {t.status === "pending" && (
+                      <button
+                        onClick={() => update(t.id, "in_progress")}
+                        className="rounded-lg bg-primary/10 px-3 py-1.5 text-xs font-medium text-primary hover:bg-primary/20"
+                      >
+                        {tr("手動派發")}
+                      </button>
+                    )}
+                    {t.status === "in_progress" && (
+                      <button
+                        onClick={() => update(t.id, "done")}
+                        className="rounded-lg bg-success/15 px-3 py-1.5 text-xs font-medium text-success-foreground hover:bg-success/25"
+                      >
+                        {tr("標記完成")}
+                      </button>
+                    )}
                     <button
-                      onClick={() => update(t.id, "in_progress")}
-                      className="rounded-lg bg-primary/10 px-3 py-1.5 text-xs font-medium text-primary hover:bg-primary/20"
+                      onClick={() => remove(t.id)}
+                      className="rounded-lg p-1.5 text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
+                      aria-label="delete"
                     >
-                      {tr("手動派發")}
+                      <Trash2 className="h-4 w-4" />
                     </button>
-                  )}
-                  {t.status === "in_progress" && (
-                    <button
-                      onClick={() => update(t.id, "done")}
-                      className="rounded-lg bg-success/15 px-3 py-1.5 text-xs font-medium text-success-foreground hover:bg-success/25"
-                    >
-                      {tr("標記完成")}
-                    </button>
-                  )}
-                  <button
-                    onClick={() => remove(t.id)}
-                    className="rounded-lg p-1.5 text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
-                    aria-label="delete"
-                  >
-                    <Trash2 className="h-4 w-4" />
-                  </button>
-                </div>
+                  </div>
+                )}
               </div>
             ))}
           </div>
@@ -467,14 +469,20 @@ function LocationsPanel({ demoMode }: { demoMode: boolean }) {
   const [code, setCode] = useState("");
   const [name, setName] = useState("");
   const [desc, setDesc] = useState("");
+  const [loadError, setLoadError] = useState<string | null>(null);
 
   const reload = useCallback(async () => {
     if (demoMode) {
       setLocs(getDemoState().locations as Location[]);
       return;
     }
-    const { data } = await supabase.from("locations").select("*").order("code");
-    setLocs((data ?? []) as Location[]);
+    try {
+      setLocs(await listLocations());
+      setLoadError(null);
+    } catch {
+      setLocs([]);
+      setLoadError(tr("無法載入地點資料。"));
+    }
   }, [demoMode]);
   useEffect(() => {
     reload();
@@ -502,19 +510,7 @@ function LocationsPanel({ demoMode }: { demoMode: boolean }) {
       setDesc("");
       return;
     }
-    const { error } = await supabase.from("locations").insert({
-      code: code.trim().toUpperCase(),
-      name: name.trim(),
-      description: desc.trim() || null,
-    });
-    if (error) {
-      alert(error.message);
-      return;
-    }
-    setCode("");
-    setName("");
-    setDesc("");
-    reload();
+    return;
   }
   async function remove(c: string) {
     if (!confirm(tr("刪除地點 {{code}}？", { code: c }))) return;
@@ -524,9 +520,7 @@ function LocationsPanel({ demoMode }: { demoMode: boolean }) {
       });
       return;
     }
-    const { error } = await supabase.from("locations").delete().eq("code", c);
-    if (error) alert(error.message);
-    reload();
+    return;
   }
 
   return (
@@ -538,6 +532,11 @@ function LocationsPanel({ demoMode }: { demoMode: boolean }) {
         <div className="border-b border-border p-4">
           <h2 className="font-semibold">{tr("已註冊地點")}</h2>
         </div>
+        {loadError && (
+          <div className="border-b border-border px-4 py-3 text-sm text-destructive">
+            {loadError}
+          </div>
+        )}
         {!locs ? (
           <div className="flex justify-center py-12 text-muted-foreground">
             <Loader2 className="h-5 w-5 animate-spin" />
@@ -559,61 +558,75 @@ function LocationsPanel({ demoMode }: { demoMode: boolean }) {
                     <div className="text-xs text-muted-foreground">{tr(l.description)}</div>
                   )}
                 </div>
-                <button
-                  onClick={() => remove(l.code)}
-                  className="rounded-lg p-1.5 text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
-                >
-                  <Trash2 className="h-4 w-4" />
-                </button>
+                {demoMode && (
+                  <button
+                    onClick={() => remove(l.code)}
+                    className="rounded-lg p-1.5 text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </button>
+                )}
               </div>
             ))}
           </div>
         )}
       </div>
 
-      <form
-        onSubmit={add}
-        className="h-fit rounded-2xl border border-border bg-card p-5"
-        style={{ boxShadow: "var(--shadow-card)" }}
-      >
-        <h2 className="font-semibold">{tr("新增地點")}</h2>
-        <p className="mt-1 text-xs text-muted-foreground">{tr("地點代碼會嵌入 QR Code。")}</p>
-        <div className="mt-4 space-y-3">
-          <div>
-            <label className="text-xs font-medium">{tr("代碼（英數字）")}</label>
-            <input
-              value={code}
-              onChange={(e) => setCode(e.target.value)}
-              placeholder="A1"
-              className="mt-1 w-full rounded-lg border border-input bg-background px-3 py-2 text-sm uppercase outline-none focus:border-ring focus:ring-2 focus:ring-ring/20"
-            />
-          </div>
-          <div>
-            <label className="text-xs font-medium">{tr("名稱")}</label>
-            <input
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              placeholder={tr("A 區入口")}
-              className="mt-1 w-full rounded-lg border border-input bg-background px-3 py-2 text-sm outline-none focus:border-ring focus:ring-2 focus:ring-ring/20"
-            />
-          </div>
-          <div>
-            <label className="text-xs font-medium">{tr("說明（可選）")}</label>
-            <input
-              value={desc}
-              onChange={(e) => setDesc(e.target.value)}
-              placeholder={tr("主要入口大廳")}
-              className="mt-1 w-full rounded-lg border border-input bg-background px-3 py-2 text-sm outline-none focus:border-ring focus:ring-2 focus:ring-ring/20"
-            />
-          </div>
-        </div>
-        <button
-          type="submit"
-          className="mt-4 flex w-full items-center justify-center gap-1.5 rounded-lg bg-primary py-2.5 text-sm font-semibold text-primary-foreground"
+      {demoMode ? (
+        <form
+          onSubmit={add}
+          className="h-fit rounded-2xl border border-border bg-card p-5"
+          style={{ boxShadow: "var(--shadow-card)" }}
         >
-          <Plus className="h-4 w-4" /> {tr("新增")}
-        </button>
-      </form>
+          <h2 className="font-semibold">{tr("新增地點")}</h2>
+          <p className="mt-1 text-xs text-muted-foreground">{tr("地點代碼會嵌入 QR Code。")}</p>
+          <div className="mt-4 space-y-3">
+            <div>
+              <label className="text-xs font-medium">{tr("代碼（英數字）")}</label>
+              <input
+                value={code}
+                onChange={(e) => setCode(e.target.value)}
+                placeholder="A1"
+                className="mt-1 w-full rounded-lg border border-input bg-background px-3 py-2 text-sm uppercase outline-none focus:border-ring focus:ring-2 focus:ring-ring/20"
+              />
+            </div>
+            <div>
+              <label className="text-xs font-medium">{tr("名稱")}</label>
+              <input
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                placeholder={tr("A 區入口")}
+                className="mt-1 w-full rounded-lg border border-input bg-background px-3 py-2 text-sm outline-none focus:border-ring focus:ring-2 focus:ring-ring/20"
+              />
+            </div>
+            <div>
+              <label className="text-xs font-medium">{tr("說明（可選）")}</label>
+              <input
+                value={desc}
+                onChange={(e) => setDesc(e.target.value)}
+                placeholder={tr("主要入口大廳")}
+                className="mt-1 w-full rounded-lg border border-input bg-background px-3 py-2 text-sm outline-none focus:border-ring focus:ring-2 focus:ring-ring/20"
+              />
+            </div>
+          </div>
+          <button
+            type="submit"
+            className="mt-4 flex w-full items-center justify-center gap-1.5 rounded-lg bg-primary py-2.5 text-sm font-semibold text-primary-foreground"
+          >
+            <Plus className="h-4 w-4" /> {tr("新增")}
+          </button>
+        </form>
+      ) : (
+        <div
+          className="h-fit rounded-2xl border border-border bg-card p-5"
+          style={{ boxShadow: "var(--shadow-card)" }}
+        >
+          <h2 className="font-semibold">{tr("正式地點管理")}</h2>
+          <p className="mt-2 text-sm text-muted-foreground">
+            {tr("正式地點為導航資料，新增或刪除需要管理員驗證；公開網頁目前僅提供檢視。")}
+          </p>
+        </div>
+      )}
     </div>
   );
 }
@@ -627,11 +640,9 @@ function QRPanel({ demoMode }: { demoMode: boolean }) {
       setOrigin(window.location.origin);
       return subscribeDemoState((state) => setLocs(state.locations as Location[]));
     }
-    supabase
-      .from("locations")
-      .select("*")
-      .order("code")
-      .then(({ data }) => setLocs((data ?? []) as Location[]));
+    void listLocations()
+      .then(setLocs)
+      .catch(() => setLocs([]));
     setOrigin(window.location.origin);
   }, [demoMode]);
 

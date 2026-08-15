@@ -1,7 +1,15 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { z } from "zod";
-import { supabase } from "@/integrations/supabase/client";
+import {
+  cancelOrder,
+  createOrder,
+  getOrder,
+  listLocations,
+  type ApiLocation,
+  type ApiTask,
+  type TaskType,
+} from "@/lib/api";
 import { LanguageToggle, tr, useLanguage } from "@/lib/i18n";
 import {
   advanceDemoTask,
@@ -63,20 +71,9 @@ export const Route = createFileRoute("/call")({
   }),
 });
 
-type Location = {
-  code: string;
-  name: string;
-  description: string | null;
-  floor?: string;
-  x?: number;
-  y?: number;
-};
-type Task = {
-  id: string;
-  status: "pending" | "in_progress" | "done" | "cancelled" | "failed";
-  location_code: string;
-  created_at: string;
-};
+type Location = Pick<ApiLocation, "code" | "name" | "description"> &
+  Partial<Pick<ApiLocation, "floor" | "x" | "y" | "yaw">>;
+type Task = Pick<ApiTask, "id" | "status" | "location_code" | "created_at">;
 
 type PowerBank = { id: string; battery: number };
 type ShopItem = {
@@ -263,7 +260,7 @@ function CallPage() {
   const [cart, setCart] = useState<Record<string, number>>({});
   const [allLocations, setAllLocations] = useState<Location[]>([]);
   const [aiOpen, setAiOpen] = useState(false);
-  const [demoMode, setDemoMode] = useState(Boolean(demoSearch));
+  const demoMode = Boolean(demoSearch);
   const [demoState, setDemoState] = useState<DemoState | null>(null);
 
   useEffect(() => {
@@ -276,7 +273,6 @@ function CallPage() {
       const local = getDemoLocation(locCode);
       if (!active) return;
       if (local) {
-        setDemoMode(true);
         setLoc(local);
         setLocError(null);
       } else {
@@ -291,16 +287,18 @@ function CallPage() {
     }
     void (async () => {
       try {
-        const { data, error } = await supabase
-          .from("locations")
-          .select("code,name,description")
-          .eq("code", locCode)
-          .maybeSingle();
+        const locations = await listLocations();
         if (!active) return;
-        if (error || !data) loadLocalLocation();
-        else setLoc(data);
+        const location = locations.find((item) => item.code === locCode.toUpperCase());
+        setAllLocations(locations);
+        if (!location) setLocError(tr(`找不到地點代碼「${locCode}」`));
+        else {
+          setLoc(location);
+          setLocError(null);
+        }
       } catch {
-        loadLocalLocation();
+        if (!active) return;
+        setLocError(tr("服務暫時無法連線，請稍後再試。"));
       }
     })();
     return () => {
@@ -309,25 +307,7 @@ function CallPage() {
   }, [locCode, demoSearch]);
 
   useEffect(() => {
-    if (!demoMode) {
-      void (async () => {
-        try {
-          const { data } = await supabase
-            .from("locations")
-            .select("code,name,description")
-            .order("code");
-          if (data?.length) setAllLocations(data);
-          else {
-            setDemoMode(true);
-            setAllLocations(getDemoState().locations);
-          }
-        } catch {
-          setDemoMode(true);
-          setAllLocations(getDemoState().locations);
-        }
-      })();
-      return;
-    }
+    if (!demoMode) return;
     const refresh = () => {
       const next = getDemoState();
       setDemoState(next);
@@ -337,10 +317,26 @@ function CallPage() {
     return subscribeDemoState(refresh);
   }, [demoMode]);
 
+  const liveTaskId = rich && !rich.demo ? rich.db.id : null;
   useEffect(() => {
-    if (!demoMode) return;
-    return subscribeDemoState(setDemoState);
-  }, [demoMode]);
+    if (!liveTaskId) return;
+    const taskId = liveTaskId;
+    let active = true;
+    const refresh = async () => {
+      try {
+        const task = await getOrder(taskId);
+        if (active) setRich((current) => (current ? { ...current, db: task } : current));
+      } catch {
+        // A temporary polling failure should not discard the order shown to the customer.
+      }
+    };
+    void refresh();
+    const timer = window.setInterval(refresh, 3000);
+    return () => {
+      active = false;
+      window.clearInterval(timer);
+    };
+  }, [liveTaskId]);
 
   async function createTask(kind: RichTask["kind"], summary: string, extras?: RichTask["extras"]) {
     if (!loc || busy) return;
@@ -370,29 +366,45 @@ function CallPage() {
       setCart({});
       return;
     }
-    const { data, error } = await supabase
-      .from("tasks")
-      .insert({ location_code: loc.code, note: `[${kind}] ${summary}` })
-      .select("id,status,location_code,created_at")
-      .single();
-    setBusy(false);
-    if (error || !data) {
+    const taskType: Record<RichTask["kind"], TaskType> = {
+      powerbank: "borrow",
+      return: "return",
+      shop: "delivery",
+      nav: "navigation",
+      callbot: "callbot",
+    };
+    try {
+      const data = await createOrder({
+        location_code: loc.code,
+        task_type: taskType[kind],
+        note: summary,
+        quantity: extras?.quantity ?? 1,
+      });
+      setRich({
+        db: data,
+        kind,
+        summary,
+        extras: { orderNo: data.id.slice(0, 8).toUpperCase(), ...extras },
+      });
+      setCart({});
+    } catch {
       alert(tr("呼叫失敗，請再試一次"));
-      return;
+    } finally {
+      setBusy(false);
     }
-    setRich({
-      db: data as Task,
-      kind,
-      summary,
-      extras: { orderNo: `FC${Date.now().toString().slice(-6)}`, ...extras },
-    });
-    setCart({});
   }
 
   async function cancelTask() {
     if (!rich) return;
     if (rich.demo && rich.demoTaskId) cancelDemoTask(rich.demoTaskId);
-    else await supabase.from("tasks").update({ status: "cancelled" }).eq("id", rich.db.id);
+    else {
+      try {
+        await cancelOrder(rich.db.id);
+      } catch {
+        alert(tr("任務已開始或無法取消，請重新確認狀態。"));
+        return;
+      }
+    }
     setRich(null);
     setView("home");
   }
@@ -1659,7 +1671,7 @@ function fakeReply(q: string): { text: string; suggestStaff?: boolean } {
   };
 }
 
-/* ============= Task Tracker (local Demo state or live fallback) ============= */
+/* ============= Task Tracker (local Demo state or live API status) ============= */
 function TaskTracker({
   rich,
   loc,
@@ -1674,7 +1686,6 @@ function TaskTracker({
 }) {
   const { language } = useLanguage();
   const demo = rich.demo === true;
-  const [stageIdx, setStageIdx] = useState(0);
   const [demoStage, setDemoStage] = useState<SimStage>("pending");
 
   useEffect(() => {
@@ -1692,30 +1703,21 @@ function TaskTracker({
     };
   }, [demo, rich.demoTaskId]);
 
-  useEffect(() => {
-    if (demo) return;
-    // Live fallback: keep the original visual walkthrough when the API is used
-    // without the local demo adapter.
-    if (rich.db.status === "cancelled" || rich.db.status === "failed") return;
-    if (stageIdx >= STAGES.length - 1) return;
-    const t = setTimeout(
-      () => setStageIdx((i) => Math.min(i + 1, STAGES.length - 1)),
-      stageIdx === 0 ? 800 : 2000,
-    );
-    return () => clearTimeout(t);
-  }, [demo, stageIdx, rich.db.status]);
-
-  const current = demo
-    ? (STAGES.find((stage) => stage.key === demoStage) ?? STAGES[0])
-    : STAGES[stageIdx];
-  const currentStageIndex = demo
-    ? Math.max(
-        0,
-        STAGES.findIndex((stage) => stage.key === demoStage),
-      )
-    : stageIdx;
+  const liveStage: SimStage =
+    rich.db.status === "done"
+      ? "completed"
+      : rich.db.status === "in_progress"
+        ? "moving"
+        : "pending";
+  const activeStage = demo ? demoStage : liveStage;
+  const current = STAGES.find((stage) => stage.key === activeStage) ?? STAGES[0];
+  const currentStageIndex = Math.max(
+    0,
+    STAGES.findIndex((stage) => stage.key === activeStage),
+  );
   const finished =
     current.key === "completed" || rich.db.status === "cancelled" || rich.db.status === "failed";
+  const terminalError = rich.db.status === "cancelled" || rich.db.status === "failed";
   const arrived = currentStageIndex >= 3;
 
   const kindLabel = {
@@ -1736,14 +1738,24 @@ function TaskTracker({
         <div className="mt-2 font-mono text-[10px] uppercase tracking-widest text-muted-foreground">
           {tr("訂單 #{{number}}", { number: rich.extras?.orderNo ?? "—" })}
         </div>
-        <h2 className="mt-1 text-xl font-black">{tr(current.label)}</h2>
-        <p className="text-xs text-muted-foreground">{tr(current.hint)}</p>
+        <h2 className="mt-1 text-xl font-black">
+          {tr(
+            rich.db.status === "cancelled"
+              ? "任務已取消"
+              : rich.db.status === "failed"
+                ? "任務執行失敗"
+                : current.label,
+          )}
+        </h2>
+        <p className="text-xs text-muted-foreground">
+          {tr(terminalError ? "如仍需要服務，請返回首頁重新建立任務。" : current.hint)}
+        </p>
       </div>
 
       {/* Robot animation */}
       <div className="mt-5 flex justify-center">
         <div className="relative flex h-32 w-32 items-center justify-center rounded-full bg-primary/5">
-          {!arrived && stageIdx >= 1 && (
+          {!arrived && currentStageIndex >= 1 && (
             <>
               <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-primary/20" />
               <span className="absolute inline-flex h-24 w-24 animate-pulse rounded-full bg-primary/10" />
@@ -1752,7 +1764,9 @@ function TaskTracker({
           {arrived && !finished && (
             <span className="absolute inline-flex h-full w-full animate-pulse rounded-full bg-[hsl(30_95%_55%)]/30" />
           )}
-          {finished && current.key === "completed" ? (
+          {terminalError ? (
+            <X className="relative h-16 w-16 text-destructive" />
+          ) : finished && current.key === "completed" ? (
             <CheckCircle2 className="relative h-16 w-16 text-success" />
           ) : (
             <Bot className="relative h-14 w-14 text-primary" />
@@ -1850,7 +1864,7 @@ function TaskTracker({
           onClick={onDone}
           className="mt-4 w-full rounded-xl bg-primary py-3 text-sm font-semibold text-primary-foreground"
         >
-          {tr("我看到機器人了 · 完成")}
+          {tr(terminalError ? "返回首頁" : "我看到機器人了 · 完成")}
         </button>
       )}
     </div>
