@@ -18,6 +18,7 @@ export type ApiTask = {
   status: TaskStatus;
   note: string | null;
   result_note: string | null;
+  power_bank_id: string | null;
   required_charge: number | null;
   quantity: number;
   robot_id: string | null;
@@ -56,6 +57,7 @@ export type CreateOrderInput = {
   location_code: string;
   task_type: TaskType;
   note?: string;
+  power_bank_id?: string;
   required_charge?: number;
   quantity?: number;
 };

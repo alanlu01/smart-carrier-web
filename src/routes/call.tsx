@@ -400,6 +400,7 @@ function CallPage() {
         location_code: loc.code,
         task_type: taskType[kind],
         note: summary,
+        power_bank_id: kind === "powerbank" ? extras?.powerBankId : undefined,
         quantity: extras?.quantity ?? 1,
       });
       setRich({
