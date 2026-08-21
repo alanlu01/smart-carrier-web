@@ -27,6 +27,31 @@ export type ApiTask = {
   completed_at: string | null;
 };
 
+export type ApiRobotSlotStatus = {
+  slot: number;
+  bank_id: string | null;
+  status: "empty" | "low" | "ready" | "full" | "unknown";
+  voltage: number | null;
+  current: number | null;
+  charge: number | null;
+  sensor_ok: boolean;
+  updated_at: string | null;
+};
+
+export type ApiRobotStatus = {
+  id: string;
+  online: boolean;
+  mode: string;
+  battery: number | null;
+  location_code: string | null;
+  x: number | null;
+  y: number | null;
+  yaw: number | null;
+  last_seen_at: string;
+  current_task_id: string | null;
+  slots: ApiRobotSlotStatus[];
+};
+
 export type CreateOrderInput = {
   location_code: string;
   task_type: TaskType;
@@ -77,6 +102,10 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 
 export function listLocations(): Promise<ApiLocation[]> {
   return request("/api/v1/locations");
+}
+
+export function getRobotStatus(robotId = "R1"): Promise<ApiRobotStatus> {
+  return request(`/api/v1/robots/${encodeURIComponent(robotId)}/status`);
 }
 
 export function listOrders(limit = 200): Promise<ApiTask[]> {

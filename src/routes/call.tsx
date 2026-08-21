@@ -6,8 +6,11 @@ import {
   cancelOrder,
   createOrder,
   getOrder,
+  getRobotStatus,
   listLocations,
   type ApiLocation,
+  type ApiRobotSlotStatus,
+  type ApiRobotStatus,
   type ApiTask,
   type TaskType,
 } from "@/lib/api";
@@ -95,17 +98,6 @@ type Plan = {
   tag?: string;
   hint: string;
 };
-
-const POWER_BANKS: PowerBank[] = [
-  { id: "PB-01", battery: 98 },
-  { id: "PB-02", battery: 87 },
-  { id: "PB-03", battery: 76 },
-  { id: "PB-04", battery: 65 },
-  { id: "PB-05", battery: 52 },
-  { id: "PB-06", battery: 41 },
-  { id: "PB-07", battery: 33 },
-  { id: "PB-08", battery: 22 },
-];
 
 const PLANS: Plan[] = [
   { id: "p1", label: "1 小時方案", hours: 1, price: 20, hint: "臨時充電、短暫外出" },
@@ -263,6 +255,8 @@ function CallPage() {
   const [aiOpen, setAiOpen] = useState(false);
   const demoMode = Boolean(demoSearch);
   const [demoState, setDemoState] = useState<DemoState | null>(null);
+  const [robotStatus, setRobotStatus] = useState<ApiRobotStatus | null>(null);
+  const [robotStatusUnavailable, setRobotStatusUnavailable] = useState(false);
 
   useEffect(() => {
     if (!locCode) {
@@ -316,6 +310,33 @@ function CallPage() {
     };
     refresh();
     return subscribeDemoState(refresh);
+  }, [demoMode]);
+
+  useEffect(() => {
+    if (demoMode) {
+      setRobotStatus(null);
+      setRobotStatusUnavailable(false);
+      return;
+    }
+    let active = true;
+    const refresh = async () => {
+      try {
+        const status = await getRobotStatus("R1");
+        if (!active) return;
+        setRobotStatus(status);
+        setRobotStatusUnavailable(false);
+      } catch {
+        if (!active) return;
+        setRobotStatus(null);
+        setRobotStatusUnavailable(true);
+      }
+    };
+    void refresh();
+    const timer = window.setInterval(refresh, 5000);
+    return () => {
+      active = false;
+      window.clearInterval(timer);
+    };
   }, [demoMode]);
 
   const liveTaskId = rich && !rich.demo ? rich.db.id : null;
@@ -428,15 +449,48 @@ function CallPage() {
   );
   const cartTotal = cartItems.reduce((s, { item, qty }) => s + item.price * qty, 0);
   const cartCount = cartItems.reduce((s, x) => s + x.qty, 0);
+  const liveSlotsHealthy = Boolean(
+    robotStatus?.online &&
+    robotStatus.slots.length === 3 &&
+    robotStatus.slots.every((slot) => slot.sensor_ok && slot.status !== "unknown"),
+  );
   const availableBanks =
     demoMode && demoState
       ? demoState.slots
           .filter((slot) => slot.status === "available")
           .map((slot) => ({ id: slot.id, battery: slot.battery }))
-      : POWER_BANKS;
+      : liveSlotsHealthy
+        ? robotStatus!.slots
+            .filter(
+              (slot): slot is ApiRobotSlotStatus & { bank_id: string; charge: number } =>
+                (slot.status === "ready" || slot.status === "full") &&
+                slot.bank_id !== null &&
+                slot.charge !== null,
+            )
+            .map((slot) => ({ id: slot.bank_id, battery: Math.round(slot.charge) }))
+        : [];
   const emptySlots =
-    demoMode && demoState ? demoState.slots.filter((slot) => slot.status === "empty").length : 1;
-  const robot = demoState?.robot ?? { battery: 92, lastEvent: "機器人待命中" };
+    demoMode && demoState
+      ? demoState.slots.filter((slot) => slot.status === "empty").length
+      : liveSlotsHealthy
+        ? robotStatus!.slots.filter((slot) => slot.status === "empty").length
+        : 0;
+  const robotBattery = demoMode ? demoState?.robot.battery : robotStatus?.battery;
+  const robotBatteryText = robotBattery == null ? "—" : `${Math.round(robotBattery)}%`;
+  const robotStateText = demoMode
+    ? (demoState?.robot.lastEvent ?? "車況載入中")
+    : robotStatusUnavailable
+      ? "車況無法連線"
+      : !robotStatus
+        ? "車況載入中"
+        : !robotStatus.online
+          ? "機器人離線"
+          : !liveSlotsHealthy
+            ? "槽位感測異常"
+            : robotStatus.mode === "dispatching"
+              ? "機器人執行任務中"
+              : "機器人待命中";
+  const robotStateHealthy = demoMode || (Boolean(robotStatus?.online) && liveSlotsHealthy);
 
   return (
     <div className="min-h-screen bg-[hsl(220_20%_97%)] text-foreground">
@@ -492,12 +546,16 @@ function CallPage() {
                 <div className="font-mono text-[10px] uppercase opacity-70">{loc.code}</div>
               </div>
               <div className="shrink-0 text-right">
-                <div className="inline-flex items-center gap-1 rounded-full bg-emerald-400/25 px-2 py-0.5 text-[10px] font-semibold">
-                  <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-emerald-300" />{" "}
-                  {tr(demoMode ? robot.lastEvent : "機器人待命中")}
+                <div
+                  className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold ${robotStateHealthy ? "bg-emerald-400/25" : "bg-amber-400/25"}`}
+                >
+                  <span
+                    className={`h-1.5 w-1.5 rounded-full ${robotStateHealthy ? "animate-pulse bg-emerald-300" : "bg-amber-300"}`}
+                  />{" "}
+                  {tr(robotStateText)}
                 </div>
                 <div className="mt-1 text-[10px] opacity-80">
-                  FlowBot #01 · {tr("電量")} {demoMode ? robot.battery : 92}%
+                  FlowBot #01 · {tr("電量")} {robotBatteryText}
                 </div>
               </div>
             </div>
@@ -515,9 +573,7 @@ function CallPage() {
               <div className="text-muted-foreground">{tr("可歸還槽")}</div>
             </div>
             <div className="rounded-xl bg-white/80 px-2 py-2 shadow-sm">
-              <div className="font-bold text-emerald-600">
-                {demoMode ? `${robot.battery}%` : "92%"}
-              </div>
+              <div className="font-bold text-emerald-600">{robotBatteryText}</div>
               <div className="text-muted-foreground">{tr("車載電量")}</div>
             </div>
           </div>
@@ -630,6 +686,7 @@ function CallPage() {
 
       {aiOpen && (
         <AIChatModal
+          availableCount={availableBanks.length}
           onClose={() => setAiOpen(false)}
           onCallService={() => {
             setAiOpen(false);
@@ -1543,9 +1600,11 @@ function CallBotPanel({
 /* ============= AI Chat ============= */
 type ChatMsg = { role: "user" | "bot"; text: string; suggestStaff?: boolean };
 function AIChatModal({
+  availableCount,
   onClose,
   onCallService,
 }: {
+  availableCount: number;
   onClose: () => void;
   onCallService: () => void;
 }) {
@@ -1564,7 +1623,7 @@ function AIChatModal({
   function ask(q: string) {
     q = q.trim();
     if (!q) return;
-    const { text, suggestStaff } = fakeReply(q);
+    const { text, suggestStaff } = fakeReply(q, availableCount);
     setMsgs((m) => [...m, { role: "user", text: q }, { role: "bot", text, suggestStaff }]);
     setInput("");
   }
@@ -1648,12 +1707,12 @@ function AIChatModal({
     </div>
   );
 }
-function fakeReply(q: string): { text: string; suggestStaff?: boolean } {
+function fakeReply(q: string, availableCount: number): { text: string; suggestStaff?: boolean } {
   if (/(電源|充電|power|電池)/i.test(q))
     return {
       text: tr(
         "目前有 {{count}} 顆行動電源可租借，方案從 NT$20/小時到 NT$100/日。請到「租借行動電源」選擇即可。",
-        { count: POWER_BANKS.length },
+        { count: availableCount },
       ),
     };
   if (/(歸還|還|return)/i.test(q))
