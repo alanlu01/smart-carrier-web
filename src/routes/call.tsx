@@ -2,6 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { z } from "zod";
 import {
+  ApiError,
   cancelOrder,
   createOrder,
   getOrder,
@@ -400,7 +401,15 @@ function CallPage() {
     else {
       try {
         await cancelOrder(rich.db.id);
-      } catch {
+      } catch (error) {
+        if (error instanceof ApiError && error.status === 409) {
+          try {
+            const task = await getOrder(rich.db.id);
+            setRich((current) => (current ? { ...current, db: task } : current));
+          } catch {
+            // Keep the current task visible if the follow-up status refresh also fails.
+          }
+        }
         alert(tr("任務已開始或無法取消，請重新確認狀態。"));
         return;
       }
@@ -1718,6 +1727,8 @@ function TaskTracker({
   const finished =
     current.key === "completed" || rich.db.status === "cancelled" || rich.db.status === "failed";
   const terminalError = rich.db.status === "cancelled" || rich.db.status === "failed";
+  const canCancel = demo || rich.db.status === "pending";
+  const executing = !demo && rich.db.status === "in_progress";
   const arrived = currentStageIndex >= 3;
 
   const kindLabel = {
@@ -1852,13 +1863,17 @@ function TaskTracker({
       </div>
 
       {/* Actions */}
-      {!finished ? (
+      {!finished && canCancel ? (
         <button
           onClick={onCancel}
           className="mt-4 w-full rounded-xl border border-border py-3 text-sm font-medium hover:bg-secondary"
         >
           {tr("取消任務")}
         </button>
+      ) : executing ? (
+        <div className="mt-4 rounded-xl bg-secondary px-3 py-3 text-center text-xs font-medium text-muted-foreground">
+          {tr("機器人已開始執行，無法取消")}
+        </div>
       ) : (
         <button
           onClick={onDone}

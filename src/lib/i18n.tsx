@@ -305,6 +305,10 @@ const EN = new Map<string, string>([
   ["目的地", "Destination"],
   ["訂單金額", "Order total"],
   ["取消任務", "Cancel task"],
+  [
+    "機器人已開始執行，無法取消",
+    "The robot has started the task and it can no longer be cancelled.",
+  ],
   ["我看到機器人了 · 完成", "I see the robot · Complete"],
   ["1 小時方案", "1-hour plan"],
   ["臨時充電、短暫外出", "Quick charging for a short visit"],
