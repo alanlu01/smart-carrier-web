@@ -3,6 +3,8 @@ import { useCallback, useEffect, useState } from "react";
 import { z } from "zod";
 import { QRCodeSVG } from "qrcode.react";
 import {
+  ApiError,
+  cancelOrder,
   getRobotStatus,
   listLocations,
   listOrders,
@@ -159,6 +161,7 @@ function TasksPanel({ demoMode }: { demoMode: boolean }) {
   const [robotStatus, setRobotStatus] = useState<ApiRobotStatus | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [robotLoadError, setRobotLoadError] = useState<string | null>(null);
+  const [cancellingTaskId, setCancellingTaskId] = useState<string | null>(null);
 
   const reload = useCallback(async () => {
     if (demoMode) {
@@ -223,6 +226,26 @@ function TasksPanel({ demoMode }: { demoMode: boolean }) {
       return;
     }
     // Destructive live operations require an authenticated admin API.
+  }
+
+  async function cancelPendingTask(task: Task) {
+    const number = task.id.slice(0, 8).toUpperCase();
+    if (!confirm(tr("確定取消等待中的訂單 #{{number}}？", { number }))) return;
+
+    setCancellingTaskId(task.id);
+    try {
+      await cancelOrder(task.id);
+      await reload();
+    } catch (error) {
+      if (error instanceof ApiError && error.status === 409) {
+        alert(tr("任務已開始或狀態已變更，無法取消。"));
+      } else {
+        alert(tr("取消訂單失敗，請稍後再試。"));
+      }
+      await reload();
+    } finally {
+      setCancellingTaskId(null);
+    }
   }
 
   const pending = tasks?.filter((t) => t.status === "pending").length ?? 0;
@@ -315,6 +338,21 @@ function TasksPanel({ demoMode }: { demoMode: boolean }) {
                       <Trash2 className="h-4 w-4" />
                     </button>
                   </div>
+                )}
+                {!demoMode && t.status === "pending" && (
+                  <button
+                    type="button"
+                    disabled={cancellingTaskId === t.id}
+                    onClick={() => void cancelPendingTask(t)}
+                    className="inline-flex items-center gap-1.5 rounded-lg border border-destructive/30 bg-destructive/5 px-3 py-1.5 text-xs font-semibold text-destructive transition hover:bg-destructive/10 disabled:cursor-wait disabled:opacity-60"
+                  >
+                    {cancellingTaskId === t.id ? (
+                      <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                    ) : (
+                      <XCircle className="h-3.5 w-3.5" />
+                    )}
+                    {tr(cancellingTaskId === t.id ? "取消中..." : "取消訂單")}
+                  </button>
                 )}
               </div>
             ))}
