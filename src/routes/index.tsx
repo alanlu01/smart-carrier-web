@@ -1,5 +1,15 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { QrCode, Bot, LayoutDashboard, ArrowRight, Radio, MapPin, Zap } from "lucide-react";
+import {
+  QrCode,
+  Bot,
+  LayoutDashboard,
+  ArrowRight,
+  Radio,
+  MapPin,
+  Zap,
+  Server,
+  FlaskConical,
+} from "lucide-react";
 import { LanguageToggle, tr, useLanguage } from "@/lib/i18n";
 
 export const Route = createFileRoute("/")({
@@ -39,21 +49,30 @@ function Index() {
             {tr("顧客掃 QR Code → 選擇需求 → 後端派任務 → 機器人自動導航到達。")}{" "}
             {tr("專為商場、餐廳、飯店設計的無 GPS 室內呼叫系統。")}
           </p>
-          <div className="mt-8 flex flex-wrap gap-3">
-            <Link
-              to="/admin"
-              search={{ demo: true }}
-              className="inline-flex items-center gap-2 rounded-full bg-white px-6 py-3 text-sm font-semibold text-primary shadow-lg transition hover:scale-105"
-            >
-              <LayoutDashboard className="h-4 w-4" /> {tr("開啟管理後台")}
-            </Link>
-            <Link
-              to="/call"
-              search={{ location: "A1", demo: true }}
-              className="inline-flex items-center gap-2 rounded-full border border-white/30 bg-white/10 px-6 py-3 text-sm font-semibold text-white backdrop-blur transition hover:bg-white/20"
-            >
-              <QrCode className="h-4 w-4" /> {tr("預覽顧客呼叫頁")}
-            </Link>
+          <div className="mt-8 max-w-3xl">
+            <div className="mb-3 text-sm font-semibold text-white/90">{tr("選擇使用模式")}</div>
+            <div className="grid gap-4 md:grid-cols-2">
+              <ModeCard
+                icon={Server}
+                title={tr("正式系統")}
+                description={tr("連接正式 API 與實體機器人，建立的任務會進入真實佇列。")}
+                badge={tr("LIVE")}
+                badgeClass="bg-emerald-400/20 text-emerald-50"
+                adminLabel={tr("進入正式後台")}
+                customerLabel={tr("進入正式顧客介面")}
+                demo={false}
+              />
+              <ModeCard
+                icon={FlaskConical}
+                title={tr("Demo 模式")}
+                description={tr("使用瀏覽器本機模擬資料，不會控制實體機器人。")}
+                badge={tr("DEMO")}
+                badgeClass="bg-amber-300/25 text-amber-50"
+                adminLabel={tr("進入 Demo 後台")}
+                customerLabel={tr("進入 Demo 顧客介面")}
+                demo
+              />
+            </div>
           </div>
         </div>
       </header>
@@ -140,6 +159,61 @@ Content-Type: application/json
           </div>
         </div>
       </section>
+    </div>
+  );
+}
+
+function ModeCard({
+  icon: Icon,
+  title,
+  description,
+  badge,
+  badgeClass,
+  adminLabel,
+  customerLabel,
+  demo,
+}: {
+  icon: React.ElementType;
+  title: string;
+  description: string;
+  badge: string;
+  badgeClass: string;
+  adminLabel: string;
+  customerLabel: string;
+  demo: boolean;
+}) {
+  return (
+    <div className="rounded-2xl border border-white/25 bg-white/12 p-4 backdrop-blur-md">
+      <div className="flex items-start justify-between gap-3">
+        <div className="flex items-center gap-2.5">
+          <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-white/15">
+            <Icon className="h-5 w-5" />
+          </span>
+          <div className="font-bold">{title}</div>
+        </div>
+        <span
+          className={`rounded-full px-2.5 py-1 text-[10px] font-black tracking-wider ${badgeClass}`}
+        >
+          {badge}
+        </span>
+      </div>
+      <p className="mt-3 min-h-10 text-xs leading-relaxed text-white/80">{description}</p>
+      <div className="mt-4 grid gap-2">
+        <Link
+          to="/admin"
+          search={demo ? { demo: true } : {}}
+          className="inline-flex items-center justify-center gap-2 rounded-xl bg-white px-4 py-2.5 text-xs font-bold text-primary transition hover:scale-[1.02]"
+        >
+          <LayoutDashboard className="h-4 w-4" /> {adminLabel}
+        </Link>
+        <Link
+          to="/call"
+          search={demo ? { location: "A1", demo: true } : { location: "A1" }}
+          className="inline-flex items-center justify-center gap-2 rounded-xl border border-white/25 bg-white/10 px-4 py-2.5 text-xs font-bold text-white transition hover:bg-white/20"
+        >
+          <QrCode className="h-4 w-4" /> {customerLabel}
+        </Link>
+      </div>
     </div>
   );
 }

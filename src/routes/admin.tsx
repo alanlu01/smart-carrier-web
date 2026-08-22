@@ -2,7 +2,13 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { useCallback, useEffect, useState } from "react";
 import { z } from "zod";
 import { QRCodeSVG } from "qrcode.react";
-import { listLocations, listOrders, type ApiTask } from "@/lib/api";
+import {
+  getRobotStatus,
+  listLocations,
+  listOrders,
+  type ApiRobotStatus,
+  type ApiTask,
+} from "@/lib/api";
 import { LanguageToggle, tr, useLanguage } from "@/lib/i18n";
 import {
   advanceAllDemoTasks,
@@ -150,7 +156,9 @@ function TasksPanel({ demoMode }: { demoMode: boolean }) {
   const [tasks, setTasks] = useState<Task[] | null>(null);
   const [locs, setLocs] = useState<Record<string, Location>>({});
   const [demoState, setDemoState] = useState<DemoState | null>(null);
+  const [robotStatus, setRobotStatus] = useState<ApiRobotStatus | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
+  const [robotLoadError, setRobotLoadError] = useState<string | null>(null);
 
   const reload = useCallback(async () => {
     if (demoMode) {
@@ -168,17 +176,29 @@ function TasksPanel({ demoMode }: { demoMode: boolean }) {
         })),
       );
       setLocs(Object.fromEntries(state.locations.map((x) => [x.code, x as Location])));
+      setRobotStatus(null);
       setLoadError(null);
+      setRobotLoadError(null);
       return;
     }
+
+    const tasksAndLocationsPromise = Promise.all([listOrders(200), listLocations()]);
+    const robotStatusPromise = getRobotStatus("R1");
     try {
-      const [tasksData, locationsData] = await Promise.all([listOrders(200), listLocations()]);
+      const [tasksData, locationsData] = await tasksAndLocationsPromise;
       setTasks(tasksData);
       setLocs(Object.fromEntries(locationsData.map((x) => [x.code, x])));
       setLoadError(null);
     } catch {
       setLoadError(tr("無法連線至後端服務，請稍後再試。"));
       setTasks((current) => current ?? []);
+    }
+    try {
+      setRobotStatus(await robotStatusPromise);
+      setRobotLoadError(null);
+    } catch {
+      setRobotStatus(null);
+      setRobotLoadError(tr("無法讀取機器人狀態。"));
     }
   }, [demoMode]);
 
@@ -217,6 +237,7 @@ function TasksPanel({ demoMode }: { demoMode: boolean }) {
   return (
     <div>
       {demoMode && demoState && <DemoRobotPanel state={demoState} />}
+      {!demoMode && <LiveRobotPanel status={robotStatus} error={robotLoadError} />}
       {loadError && (
         <div className="mb-4 rounded-xl border border-destructive/30 bg-destructive/5 px-4 py-3 text-sm text-destructive">
           {loadError}
@@ -302,6 +323,146 @@ function TasksPanel({ demoMode }: { demoMode: boolean }) {
       </div>
     </div>
   );
+}
+
+function LiveRobotPanel({
+  status,
+  error,
+}: {
+  status: ApiRobotStatus | null;
+  error: string | null;
+}) {
+  if (!status) {
+    return (
+      <div className="mb-6 flex min-h-28 items-center justify-center rounded-2xl border border-border bg-card text-sm text-muted-foreground">
+        {error ?? <Loader2 className="h-5 w-5 animate-spin" />}
+      </div>
+    );
+  }
+
+  const available = status.slots.filter(
+    (slot) => slot.sensor_ok && (slot.status === "ready" || slot.status === "full"),
+  ).length;
+  const empty = status.slots.filter((slot) => slot.sensor_ok && slot.status === "empty").length;
+  const location = status.location_code
+    ? status.location_code
+    : status.x !== null && status.y !== null
+      ? `${status.x.toFixed(2)}, ${status.y.toFixed(2)}`
+      : "—";
+  const lastSeen = new Date(status.last_seen_at).toLocaleString(undefined, { hour12: false });
+
+  return (
+    <div
+      className="mb-6 overflow-hidden rounded-2xl border border-primary/20 bg-card"
+      style={{ boxShadow: "var(--shadow-card)" }}
+    >
+      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border bg-primary/5 p-4">
+        <div className="flex items-center gap-3">
+          <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-primary/10 text-primary">
+            <CarFront className="h-5 w-5" />
+          </div>
+          <div>
+            <div className="flex items-center gap-2 text-sm font-bold">
+              {status.id}
+              <span
+                className={`h-2 w-2 rounded-full ${status.online ? "bg-emerald-500" : "bg-slate-400"}`}
+              />
+              <span className={status.online ? "text-emerald-700" : "text-muted-foreground"}>
+                {tr(status.online ? "線上" : "離線")}
+              </span>
+            </div>
+            <div className="mt-0.5 text-xs text-muted-foreground">
+              {tr("模式")}：{liveModeLabel(status.mode)} · {tr("最後回報")}：{lastSeen}
+            </div>
+          </div>
+        </div>
+        <div className="rounded-xl border border-border bg-background px-3 py-2 text-xs">
+          <span className="text-muted-foreground">{tr("目前任務")}：</span>{" "}
+          <span className="font-mono font-semibold">
+            {status.current_task_id ? status.current_task_id.slice(0, 8).toUpperCase() : "—"}
+          </span>
+        </div>
+      </div>
+
+      <div className="grid gap-3 p-4 sm:grid-cols-4">
+        <MiniMetric label={tr("目前位置")} value={location} icon={MapPin} />
+        <MiniMetric
+          label={tr("車載電量")}
+          value={status.battery === null ? "—" : `${status.battery}%`}
+          icon={BatteryCharging}
+        />
+        <MiniMetric
+          label={tr("可租借")}
+          value={`${available} / ${status.slots.length}`}
+          icon={Bot}
+        />
+        <MiniMetric
+          label={tr("可歸還槽")}
+          value={`${empty} / ${status.slots.length}`}
+          icon={PackageOpen}
+        />
+      </div>
+
+      <div className="grid gap-3 border-t border-border p-4 sm:grid-cols-3">
+        {status.slots.map((slot) => (
+          <div key={slot.slot} className="rounded-xl border border-border bg-background p-3">
+            <div className="flex items-center justify-between gap-2">
+              <span className="text-xs font-bold">
+                {tr("槽位")} {slot.slot}
+              </span>
+              <span
+                className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${slotStatusClass(slot.status, slot.sensor_ok)}`}
+              >
+                {tr(slotStatusLabel(slot.status, slot.sensor_ok))}
+              </span>
+            </div>
+            <div className="mt-2 text-sm font-semibold">{slot.bank_id ?? "—"}</div>
+            <div className="mt-1 text-[11px] text-muted-foreground">
+              {tr("電量")} {slot.charge === null ? "—" : `${slot.charge}%`} ·{" "}
+              {slot.voltage === null ? "—" : `${slot.voltage.toFixed(3)} V`} ·{" "}
+              {slot.current === null ? "—" : `${slot.current.toFixed(3)} A`}
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {!status.online && (
+        <div className="mx-4 mb-4 flex items-center gap-2 rounded-xl bg-amber-50 px-3 py-2 text-xs font-medium text-amber-800">
+          <AlertTriangle className="h-4 w-4" /> {tr("機器人 heartbeat 已逾時，請檢查車端服務。")}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function liveModeLabel(mode: string) {
+  const labels: Record<string, string> = {
+    idle: "待命",
+    dispatching: "執行任務",
+    navigation: "導航中",
+    charging: "充電中",
+    emergency: "緊急停止",
+    error: "異常",
+  };
+  return tr(labels[mode] ?? mode);
+}
+
+function slotStatusLabel(status: ApiRobotStatus["slots"][number]["status"], sensorOk: boolean) {
+  if (!sensorOk || status === "unknown") return "感測異常";
+  const labels = {
+    empty: "空槽",
+    low: "低電量",
+    ready: "可租借",
+    full: "已充滿",
+  } as const;
+  return labels[status];
+}
+
+function slotStatusClass(status: ApiRobotStatus["slots"][number]["status"], sensorOk: boolean) {
+  if (!sensorOk || status === "unknown") return "bg-red-100 text-red-700";
+  if (status === "empty") return "bg-slate-100 text-slate-600";
+  if (status === "low") return "bg-amber-100 text-amber-700";
+  return "bg-emerald-100 text-emerald-700";
 }
 
 function DemoRobotPanel({ state }: { state: DemoState }) {
